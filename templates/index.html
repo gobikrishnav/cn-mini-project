@@ -1,0 +1,3160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NetLab-Pro :: Campus Network Subnet Architect & Dynamic VLSM Suite</title>
+  
+  <!-- Vis.js for Network Topology Canvas -->
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              blue: '#2563eb',
+              lightBlue: '#3b82f6',
+              softBlue: '#eff6ff',
+              green: '#00c076',
+              softGreen: '#e6f9f1',
+              dark: '#0f172a',
+              card: '#ffffff',
+              bg: '#f8fafc'
+            }
+          },
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Consolas', 'Courier New', 'monospace']
+          },
+          boxShadow: {
+            'card': '0 4px 20px -2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02)',
+            'card-hover': '0 12px 30px -4px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.03)',
+            'pill': '0 4px 14px 0 rgba(37, 99, 235, 0.35)',
+            'pill-soft': '0 2px 8px 0 rgba(37, 99, 235, 0.15)'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f1f5f9; color: #1e293b; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .nav-item-active {
+      background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+      color: #ffffff !important;
+      box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.32);
+    }
+    .nav-item-active span, .nav-item-active svg {
+      color: #ffffff !important;
+    }
+    
+    .binary-bit {
+      transition: all 0.15s ease-in-out;
+    }
+    .binary-bit:hover {
+      transform: scale(1.15);
+      z-index: 10;
+    }
+    
+    @keyframes slideInUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-toast {
+      animation: slideInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body class="bg-[#f1f5f9] text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- ===================================================================== -->
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <!-- ===================================================================== -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: CAMPUS NETWORK USER SETUP WIZARD -->
+  <!-- ===================================================================== -->
+  <div id="modal-setup-wizard" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 w-full max-w-4xl max-h-[92vh] flex flex-col space-y-5">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-blue-500/20">
+            ⚙️
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-900">Campus Network Setup Wizard</h3>
+            <p class="text-xs text-slate-500 font-medium">Define your root IPv4 network, total laboratories, lab names, and workstation counts</p>
+          </div>
+        </div>
+        <button onclick="closeSetupWizard()" class="text-slate-400 hover:text-slate-600 text-lg font-bold p-1">✕</button>
+      </div>
+
+      <!-- Scrollable Configuration Body -->
+      <div class="flex-1 overflow-y-auto space-y-5 pr-1 custom-scrollbar">
+        
+        <!-- Step 1: Root Network Scope -->
+        <div class="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
+          <div class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+            <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+            <span>Step 1: Root IPv4 Network Scope</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">Base Network Address (IPv4)</label>
+              <input type="text" id="wiz-base-ip" value="192.168.0.0" placeholder="e.g. 192.168.0.0 or 10.0.0.0" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold mono text-slate-800 focus:outline-none focus:border-blue-500">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">CIDR Mask Prefix</label>
+              <select id="wiz-base-cidr" onchange="updateWizardCapacityHint()" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold mono text-slate-800 focus:outline-none focus:border-blue-500">
+                <option value="24" selected>/24 (256 Total IPs)</option>
+                <option value="23">/23 (512 Total IPs)</option>
+                <option value="22">/22 (1,024 Total IPs)</option>
+                <option value="21">/21 (2,048 Total IPs)</option>
+                <option value="20">/20 (4,096 Total IPs)</option>
+                <option value="16">/16 (65,536 Total IPs)</option>
+                <option value="12">/12 (1,048,576 Total IPs)</option>
+                <option value="8">/8 (16,777,216 Total IPs)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Number of Labs & Dynamic Table -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>Step 2: Define Laboratories &amp; Workstations</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <label class="text-xs font-bold text-slate-600">Total Labs:</label>
+              <input type="number" id="wiz-lab-count" min="1" max="32" value="3" oninput="updateWizardLabRows(this.value)" class="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center text-slate-800 mono focus:outline-none focus:border-blue-500">
+            </div>
+          </div>
+
+          <!-- Wizard Table Container -->
+          <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] border-b border-slate-200">
+                <tr>
+                  <th class="px-4 py-2.5">Lab #</th>
+                  <th class="px-4 py-2.5">Laboratory Name</th>
+                  <th class="px-4 py-2.5">Department / Wing</th>
+                  <th class="px-4 py-2.5 text-center">Systems (PCs)</th>
+                  <th class="px-4 py-2.5 text-center">Growth %</th>
+                  <th class="px-4 py-2.5 text-center">VLAN ID</th>
+                </tr>
+              </thead>
+              <tbody id="wiz-tbody" class="divide-y divide-slate-100">
+                <!-- Dynamically generated rows based on lab count -->
+              </tbody>
+            </table>
+          </div>
+          <!-- Capacity & Subnet Hint Strip -->
+          <div id="wiz-capacity-hint" class="p-3 bg-blue-50/70 border border-blue-200/60 rounded-xl flex items-center justify-between text-xs">
+            <span class="text-blue-800 font-semibold" id="wiz-hint-text">Total Capacity: Ready</span>
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white" id="wiz-hint-badge">Smart Auto-Expand</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer Action Buttons -->
+      <div class="flex items-center justify-between border-t border-slate-100 pt-3">
+        <button onclick="closeSetupWizard()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition">
+          Cancel
+        </button>
+        <button onclick="submitSetupWizard()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-pill transition flex items-center space-x-2">
+          <span>⚡</span>
+          <span>Generate Campus Network &amp; Subnets</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: EDIT LAB MODAL -->
+  <!-- ===================================================================== -->
+  <div id="modal-edit-lab" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 w-full max-w-md space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-base font-extrabold text-slate-900 flex items-center space-x-2">
+          <span>✏️</span>
+          <span>Edit Laboratory Specification</span>
+        </h3>
+        <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold p-1">✕</button>
+      </div>
+      <input type="hidden" id="edit-lab-id">
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Laboratory Name</label>
+          <input type="text" id="edit-lab-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Campus Department / Wing</label>
+          <input type="text" id="edit-lab-dept" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Workstations</label>
+            <input type="number" id="edit-lab-pcs" min="1" max="10000" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 mono focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Growth Buffer %</label>
+            <input type="number" id="edit-lab-growth" min="0" max="100" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 mono focus:outline-none focus:border-blue-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">VLAN ID</label>
+          <input type="number" id="edit-lab-vlan" min="1" max="4094" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 mono focus:outline-none focus:border-blue-500">
+        </div>
+      </div>
+      <div class="flex items-center space-x-3 pt-2">
+        <button onclick="closeEditModal()" class="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition">
+          Cancel
+        </button>
+        <button onclick="saveEditModal()" class="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-pill transition">
+          Save &amp; Recalculate
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN APP CONTAINER -->
+  <!-- ===================================================================== -->
+  <div class="flex flex-1 min-h-screen">
+    
+    <!-- ================================================================= -->
+    <!-- LEFT SIDEBAR -->
+    <!-- ================================================================= -->
+    <aside class="w-64 bg-white border-r border-slate-200/80 flex flex-col shrink-0 select-none sticky top-0 h-screen">
+      
+      <!-- Brand Logo Header -->
+      <div class="h-16 px-6 flex items-center border-b border-slate-100">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 font-extrabold text-sm">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div>
+            <span class="text-base font-extrabold tracking-tight text-slate-900 block leading-tight">NetLab<span class="text-blue-600">.pro</span></span>
+            <span class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase block">VLSM Subnet Suite</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation Links (7 Core Pages) -->
+      <div class="flex-1 overflow-y-auto px-4 py-6 space-y-6 custom-scrollbar">
+        
+        <div>
+          <div class="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+            CAMPUS SUBNETTING
+          </div>
+          <nav class="space-y-1.5">
+            <!-- Tab 1: Subnet Matrix -->
+            <button onclick="switchTab('vlsm')" id="nav-vlsm" class="nav-item-active w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer">
+              <div class="flex items-center space-x-3">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                <span>Subnet Matrix</span>
+              </div>
+              <span class="text-[10px] bg-white/20 text-white font-bold px-1.5 py-0.5 rounded-md" id="nav-count-badge">0</span>
+            </button>
+
+            <!-- Tab 2: Workstations -->
+            <button onclick="switchTab('inventory')" id="nav-inventory" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer">
+              <div class="flex items-center space-x-3">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                <span>Workstation Fleet</span>
+              </div>
+              <svg class="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+
+            <!-- Tab 3: Interactive Topology -->
+            <button onclick="switchTab('topology')" id="nav-topology" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer">
+              <div class="flex items-center space-x-3">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                <span>Network Topology</span>
+              </div>
+              <span class="text-[10px] bg-blue-50 text-blue-600 font-bold px-1.5 py-0.5 rounded-md">4-Tier</span>
+            </button>
+          </nav>
+        </div>
+
+        <div>
+          <div class="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+            DIAGNOSTICS &amp; ALGEBRA
+          </div>
+          <nav class="space-y-1.5">
+            <!-- Tab 4: Supernetting -->
+            <button onclick="switchTab('supernetting')" id="nav-supernetting" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer">
+              <div class="flex items-center space-x-3">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7c0-2 1-3 3-3h10c2 0 3 1 3 3M4 7h16M9 12h6"/></svg>
+                <span>CIDR Supernetting</span>
+              </div>
+              <span class="text-[10px] bg-emerald-50 text-emerald-600 font-bold px-1.5 py-0.5 rounded-md">LCP</span>
+            </button>
+
+            <!-- Tab 5: 32-Bit Binary -->
+            <button onclick="switchTab('binary')" id="nav-binary" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer">
+              <div class="flex items-center space-x-3">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+                <span>32-Bit Binary</span>
+              </div>
+              <svg class="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+
+            <!-- Tab 6: Reachability -->
+            <button onclick="switchTab('reachability')" id="nav-reachability" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer">
+              <div class="flex items-center space-x-3">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                <span>Reachability L2/L3</span>
+              </div>
+              <svg class="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+
+            <!-- Tab 7: Subnet Calculator -->
+            <button onclick="switchTab('calculator')" id="nav-calculator" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer">
+              <div class="flex items-center space-x-3">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                <span>Subnet Calculator</span>
+              </div>
+              <svg class="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </nav>
+        </div>
+
+      </div>
+
+      <!-- Bottom Engine Status -->
+      <div class="p-4 border-t border-slate-100 bg-slate-50/60">
+        <div class="flex items-center space-x-3">
+          <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+            C
+          </div>
+          <div class="overflow-hidden">
+            <div class="text-xs font-bold text-slate-900 truncate">Backend: C Native Core</div>
+            <div class="text-[10px] text-emerald-600 font-semibold flex items-center space-x-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+              <span id="sidebar-c-version">netlab_core.dll (MSVC 64-bit)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ================================================================= -->
+    <!-- MAIN CONTENT AREA -->
+    <!-- ================================================================= -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      
+      <!-- Top Navigation Header -->
+      <header class="h-16 bg-white border-b border-slate-200/80 px-8 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+        
+        <!-- Live Search Input -->
+        <div class="w-72 relative">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input type="text" id="global-search-input" oninput="handleGlobalSearch(this.value)" placeholder="Search subnets, VLANs, departments..." class="w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs font-medium text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
+        </div>
+
+        <!-- Architecture Pill & Setup Wizard Trigger -->
+        <div class="flex items-center space-x-3">
+          <div id="engine-header-badge" class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
+            <span id="engine-status-badge">⚡ Backend: C Native Core (netlab_core.dll) | Frontend: Python</span>
+          </div>
+
+          <button onclick="openSetupWizard()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-pill hover:shadow-lg transition flex items-center space-x-2 cursor-pointer">
+            <span>⚙️</span>
+            <span>Configure Campus Labs (User Input)</span>
+          </button>
+          
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
+            RFC 1918 / 4632
+          </span>
+        </div>
+
+      </header>
+
+      <!-- Main Body Container -->
+      <main class="p-8 space-y-7 flex-1">
+        
+        <!-- ============================================================= -->
+        <!-- TAB 1: MAIN SUBNET MATRIX (Full width clean dashboard) -->
+        <!-- ============================================================= -->
+        <div id="tab-content-vlsm" class="space-y-7">
+          
+          <!-- Header & Quick Setup Bar -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">Campus Network Subnet Architect</h2>
+              <p class="text-xs text-slate-500 font-medium mt-0.5">Variable Length Subnet Masking (VLSM) &amp; Deterministic Address Planning</p>
+            </div>
+            
+            <button onclick="openSetupWizard()" class="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer">
+              <span>📝</span>
+              <span>Reconfigure Inputs Wizard</span>
+            </button>
+          </div>
+
+          <!-- Target Network Scope & Address Utilization Bar Card -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-7 shadow-card space-y-6">
+            
+            <!-- Scope Selection Header -->
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-2">Target Network Scope (Root IP &amp; CIDR Mask)</label>
+              <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+                <div class="flex items-center space-x-3 bg-white p-2.5 rounded-lg border border-slate-200/80 flex-wrap gap-2.5">
+                  <div class="flex items-center space-x-2">
+                    <label class="text-xs font-bold text-slate-600">Base IP:</label>
+                    <input type="text" id="input-base-ip" value="192.168.0.0" onkeydown="if(event.key==='Enter') applyBaseScope()" class="w-32 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1 text-xs font-bold mono text-slate-800 focus:outline-none focus:border-blue-500">
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <label class="text-xs font-bold text-slate-600">CIDR:</label>
+                    <select id="input-base-cidr" onchange="applyBaseScope()" class="bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs font-bold mono text-slate-800 focus:outline-none focus:border-blue-500">
+                      <option value="8">/8 (16.7M IPs)</option>
+                      <option value="12">/12 (1M IPs)</option>
+                      <option value="16">/16 (65,536 IPs)</option>
+                      <option value="20">/20 (4,096 IPs)</option>
+                      <option value="22">/22 (1,024 IPs)</option>
+                      <option value="23">/23 (512 IPs)</option>
+                      <option value="24" selected>/24 (256 IPs)</option>
+                    </select>
+                  </div>
+                  <button onclick="applyBaseScope()" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-xs font-bold transition shadow-sm cursor-pointer">
+                    Apply Scope
+                  </button>
+                  <div class="flex items-center space-x-2 border-l border-slate-200 pl-3">
+                    <label class="text-xs font-bold text-blue-700">Number of Labs:</label>
+                    <input type="number" id="input-num-labs" min="1" max="32" value="3" onkeydown="if(event.key==='Enter') configureLabsByCount()" class="w-16 bg-blue-50/70 border border-blue-200 rounded-md px-2 py-1 text-xs font-bold text-center mono text-blue-900 focus:outline-none focus:border-blue-500">
+                  </div>
+                  <button onclick="configureLabsByCount()" class="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-md text-xs font-bold transition shadow-sm cursor-pointer flex items-center space-x-1.5">
+                    <span>⚡</span>
+                    <span>Set Labs &amp; Workstations</span>
+                  </button>
+                  <button onclick="quickGenerateNLabs()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-xs font-bold transition cursor-pointer" title="Auto-allocate subnets for N labs">
+                    Quick Allocate
+                  </button>
+                  <span class="text-xs font-bold mono text-blue-600 ml-auto" id="scope-ip-display">192.168.0.0 / 24</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Address Space Allocation Gauge / Utilization Bar -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between text-xs font-bold">
+                <span class="text-slate-700">Root Network Address Space Utilization</span>
+                <span class="text-blue-600 mono" id="utilization-label">Allocated: 0 IPs (0%)</span>
+              </div>
+              <div class="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden flex border border-slate-200/80 p-0.5">
+                <div id="gauge-used" class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full h-full transition-all duration-500" style="width: 50%"></div>
+                <div id="gauge-free" class="bg-emerald-400/30 h-full rounded-r-full" style="width: 50%"></div>
+              </div>
+              <div class="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+                <span class="flex items-center space-x-1.5">
+                  <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+                  <span id="gauge-used-txt">Allocated Blocks</span>
+                </span>
+                <span class="flex items-center space-x-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+                  <span id="gauge-free-txt">Free Addresses Remaining</span>
+                </span>
+              </div>
+            </div>
+
+            <!-- Mathematical Breakdown Metric Strip -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-slate-100 pt-5 text-xs">
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+                <span class="text-slate-400 font-medium block text-[10px] uppercase">Planned Workstations</span>
+                <span class="font-extrabold text-slate-900 mono text-sm mt-0.5 block" id="metric-workstations">-- PCs</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+                <span class="text-slate-400 font-medium block text-[10px] uppercase">Allocated Blocks</span>
+                <span class="font-extrabold text-slate-900 mono text-sm mt-0.5 block" id="metric-allocated">-- IPs</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+                <span class="text-slate-400 font-medium block text-[10px] uppercase">Usable Capacity</span>
+                <span class="font-extrabold text-[#00c076] mono text-sm mt-0.5 block" id="metric-usable">-- Usable Slots</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+                <span class="text-slate-400 font-medium block text-[10px] uppercase">Next Free Subnet</span>
+                <span class="font-extrabold text-slate-900 mono text-sm mt-0.5 block" id="metric-nextfree">--</span>
+              </div>
+              <div class="p-3 bg-blue-50/70 border border-blue-200/60 rounded-xl">
+                <span class="text-blue-600 font-bold block text-[10px] uppercase">VLSM Efficiency</span>
+                <span class="font-extrabold text-blue-700 mono text-sm mt-0.5 block" id="metric-efficiency">-- %</span>
+              </div>
+            </div>
+
+            <!-- Add Single Lab Form Inputs -->
+            <div class="border-t border-slate-100 pt-5 space-y-4">
+              <div class="text-xs font-bold text-slate-700 uppercase tracking-wider">Add Single Laboratory to Fleet</div>
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div class="sm:col-span-2">
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">New Laboratory Name</label>
+                  <input type="text" id="input-lab-name" placeholder="e.g. Cyber Security Lab" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Workstations</label>
+                  <input type="number" id="input-lab-pcs" value="50" min="1" max="5000" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 mono focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Growth %</label>
+                  <input type="number" id="input-lab-growth" value="10" min="0" max="100" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 mono focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="flex items-center space-x-3 pt-1">
+                <button onclick="clearAllLabs()" class="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer">
+                  🗑️ Clear All Labs
+                </button>
+                <button onclick="submitAddLab()" class="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-pill transition cursor-pointer">
+                  ➕ Add Laboratory
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ============================================================= -->
+          <!-- BOTTOM SECTION: Campus Subnet Allocations Table -->
+          <!-- ============================================================= -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-card overflow-hidden">
+            
+            <div class="px-7 py-5 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-extrabold text-slate-900">Campus Subnet Allocations</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Real-time descending VLSM boundary alignment across laboratories</p>
+              </div>
+
+              <!-- Essential Exports: Cisco IOS config (.cfg) & Architecture report (.txt) -->
+              <div class="flex items-center space-x-2 flex-wrap gap-y-2">
+                <a href="/download/cisco" class="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition flex items-center space-x-1.5">
+                  <span>📄</span>
+                  <span>Cisco IOS Config (.cfg)</span>
+                </a>
+                <a href="/download/report" class="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5">
+                  <span>📝</span>
+                  <span>Engineering Report (.txt)</span>
+                </a>
+                <span class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg" id="table-summary-tag">
+                  0 SUBNETS
+                </span>
+              </div>
+            </div>
+
+            <!-- Exhaustion / Warning Alert Banner -->
+            <div id="vlsm-alert-banner" class="hidden mx-7 mt-5 p-4 rounded-xl border"></div>
+
+            <!-- Active Supernet Revert Banner in VLSM -->
+            <div id="vlsm-supernet-banner" class="hidden mx-7 mt-4 p-4 rounded-xl border border-purple-200 bg-purple-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"></div>
+
+            <div class="overflow-x-auto custom-scrollbar">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-400 font-semibold uppercase tracking-wider text-[10px] border-b border-slate-100">
+                  <tr>
+                    <th class="px-5 py-3.5">#</th>
+                    <th class="px-5 py-3.5">Department / Lab Name</th>
+                    <th class="px-5 py-3.5">Campus Wing</th>
+                    <th class="px-5 py-3.5 text-center">Workstations</th>
+                    <th class="px-5 py-3.5 text-center">VLAN ID</th>
+                    <th class="px-5 py-3.5">Subnet Prefix</th>
+                    <th class="px-5 py-3.5">Usable Host Range</th>
+                    <th class="px-5 py-3.5">Gateway (SVI)</th>
+                    <th class="px-5 py-3.5 text-center">Efficiency</th>
+                    <th class="px-5 py-3.5 text-center">Quick Expand</th>
+                    <th class="px-5 py-3.5 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="vlsm-tbody" class="divide-y divide-slate-100">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 2: WORKSTATION INVENTORY & DHCP -->
+        <!-- ============================================================= -->
+        <div id="tab-content-inventory" class="hidden space-y-7">
+          
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-card flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3 w-full md:w-auto">
+              <label class="text-xs font-bold text-slate-700">Select Laboratory:</label>
+              <select id="select-inv-lab" onchange="loadLabInventory()" class="w-full md:w-80 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 font-mono focus:outline-none focus:border-blue-500">
+                <!-- Dynamically populated -->
+              </select>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-xs text-slate-500 font-bold mr-1">Scale Laboratory:</span>
+              <button onclick="addSystemsCurrentLab(1)" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl transition border border-blue-200 cursor-pointer">
+                +1 PC
+              </button>
+              <button onclick="addSystemsCurrentLab(5)" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl transition border border-blue-200 cursor-pointer">
+                +5 PCs
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-7">
+            <!-- Addressing breakdown -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-card space-y-4">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Workstation IP Hierarchy &amp; Scopes</h4>
+              <div class="grid grid-cols-2 gap-3" id="dhcp-scope-cards">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+
+            <!-- Cisco IOS DHCP Script -->
+            <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-card space-y-3 text-slate-100">
+              <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <span class="text-xs font-bold text-slate-300 font-mono">Cisco IOS DHCP Pool Script</span>
+                <button onclick="copyDhcpCli()" id="btn-copy-dhcp" class="text-xs font-bold text-blue-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition border border-slate-700 cursor-pointer">
+                  Copy CLI
+                </button>
+              </div>
+              <pre id="dhcp-cli-snippet" class="font-mono text-xs text-emerald-400 leading-relaxed overflow-x-auto custom-scrollbar max-h-52">
+! Loading DHCP configuration...
+              </pre>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-card overflow-hidden">
+            <div class="px-7 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider" id="inv-table-title">Workstation Inventory</h3>
+              <span class="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full" id="inv-count-badge">0 ALLOCATED DEVICES</span>
+            </div>
+            <div class="overflow-x-auto custom-scrollbar max-h-[500px]">
+              <table class="w-full text-left text-xs font-mono">
+                <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] border-b border-slate-100">
+                  <tr>
+                    <th class="px-6 py-3">#</th>
+                    <th class="px-6 py-3">Hostname</th>
+                    <th class="px-6 py-3">Role</th>
+                    <th class="px-6 py-3">IP Address</th>
+                    <th class="px-6 py-3">Subnet Mask</th>
+                    <th class="px-6 py-3">Gateway</th>
+                    <th class="px-6 py-3">DNS Server</th>
+                  </tr>
+                </thead>
+                <tbody id="inventory-tbody" class="divide-y divide-slate-100">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 3: INTERACTIVE CAMPUS NETWORK TOPOLOGY DIAGRAM -->
+        <!-- ============================================================= -->
+        <div id="tab-content-topology" class="hidden space-y-6">
+          
+          <!-- Top Title & Action Controls Bar -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
+                  🌐
+                </div>
+                <div>
+                  <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Interactive Campus Network Topology Engine</h2>
+                  <p class="text-xs text-slate-500 font-medium">Hierarchical 4-Tier Model: Core Gateway • Layer-3 Distribution • 802.1Q Edge Access • Workstation Fleet</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Toolbar Buttons -->
+            <div class="flex items-center flex-wrap gap-2">
+              <button onclick="fitTopologyNetwork()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer">
+                <span>🎯</span>
+                <span>Fit Screen</span>
+              </button>
+
+              <button onclick="toggleTopologyLayout()" id="btn-topo-layout" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer">
+                <span>🔀</span>
+                <span id="btn-topo-layout-txt">Hierarchical View</span>
+              </button>
+
+              <button onclick="toggleEndDevices()" id="btn-topo-tier4" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer">
+                <span>👁️</span>
+                <span id="btn-topo-tier4-txt">Hide Host Devices</span>
+              </button>
+
+              <a href="/download/topology-svg" target="_blank" class="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold border border-blue-200 transition flex items-center space-x-1.5">
+                <span>💾</span>
+                <span>Export SVG</span>
+              </a>
+
+              <a href="/download/topology-png" target="_blank" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-pill-soft transition flex items-center space-x-1.5">
+                <span>🖼️</span>
+                <span>Download PNG</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Summary Metric Badges Strip -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-card">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">TOTAL NETWORK NODES</div>
+              <div id="topo-metric-nodes" class="text-xl font-extrabold text-slate-900 mt-1">--</div>
+              <div class="text-[11px] text-blue-600 font-semibold mt-0.5">Core + Dist + Access + Hosts</div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-card">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CAMPUS ACCESS SWITCHES</div>
+              <div id="topo-metric-switches" class="text-xl font-extrabold text-[#00c076] mt-1">--</div>
+              <div class="text-[11px] text-slate-500 font-medium mt-0.5">Cisco Catalyst 9200-48P PoE+</div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-card">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ACTIVE 802.1Q VLANS</div>
+              <div id="topo-metric-vlans" class="text-xl font-extrabold text-purple-600 mt-1">--</div>
+              <div class="text-[11px] text-slate-500 font-medium mt-0.5">Isolated Broadcast Domains</div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-card">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">BACKBONE CAPACITY</div>
+              <div class="text-xl font-extrabold text-blue-600 mt-1">40 Gbps QSFP+</div>
+              <div class="text-[11px] text-emerald-600 font-semibold mt-0.5">Zero Bottleneck Campus Core</div>
+            </div>
+          </div>
+
+          <!-- Main Grid: Vis.js Canvas (Left/Center) + Inspector Card (Right) -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Vis.js Network Canvas (8 cols on lg) -->
+            <div class="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 p-4 shadow-card flex flex-col h-[700px]">
+              <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-100 text-xs flex-wrap gap-2">
+                <div class="flex items-center space-x-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span class="font-bold text-slate-700">Interactive Topology Canvas</span>
+                  <span class="text-slate-400 hidden sm:inline">• Drag nodes, scroll to zoom, click to inspect</span>
+                </div>
+                <div class="flex items-center space-x-2 text-[11px] text-slate-500">
+                  <span class="inline-block w-2.5 h-2.5 rounded bg-blue-100 border border-blue-500"></span> <span>Core</span>
+                  <span class="inline-block w-2.5 h-2.5 rounded bg-purple-100 border border-purple-500 ml-1"></span> <span>Dist</span>
+                  <span class="inline-block w-2.5 h-2.5 rounded bg-emerald-100 border border-emerald-500 ml-1"></span> <span>Access</span>
+                  <span class="inline-block w-2.5 h-2.5 rounded bg-slate-100 border border-slate-400 ml-1"></span> <span>Hosts</span>
+                </div>
+              </div>
+              <div id="topology-network-container" class="flex-1 w-full bg-slate-50/70 rounded-xl border border-slate-200/60 overflow-hidden relative">
+                <div id="topology-loading" class="absolute inset-0 flex items-center justify-center bg-white/80 z-10 text-slate-500 font-semibold text-xs">
+                  Loading Campus Topology Hierarchy...
+                </div>
+              </div>
+            </div>
+
+            <!-- Inspector Panel (4 cols on lg) -->
+            <div id="topology-inspector" class="lg:col-span-4 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-card flex flex-col h-[700px] overflow-y-auto custom-scrollbar">
+              <div id="inspector-empty" class="my-auto text-center py-12 px-4 space-y-3">
+                <div class="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-2xl mx-auto shadow-sm">
+                  🔍
+                </div>
+                <h4 class="text-sm font-bold text-slate-800">Hardware &amp; Link Inspector</h4>
+                <p class="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+                  Click any device node or connection link in the topology canvas to inspect Cisco hardware specifications, SVI routing, VLAN tags, and physical interface bindings.
+                </p>
+              </div>
+
+              <!-- Active Inspection Details -->
+              <div id="inspector-content" class="hidden space-y-4"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 4: CIDR SUPERNETTING & ROUTE SUMMARIZATION ENGINE -->
+        <!-- ============================================================= -->
+        <div id="tab-content-supernetting" class="hidden space-y-7">
+          
+          <!-- Definition & Architecture Header Banner -->
+          <div class="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-7 text-white shadow-xl relative overflow-hidden">
+            <div class="relative z-10 space-y-3">
+              <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30 uppercase tracking-wider">Computer Networks Standard</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/20 uppercase tracking-wider">RFC 1519 Classless Inter-Domain Routing</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/30 text-purple-200 border border-purple-400/30 uppercase tracking-wider">⚡ C Native Core (supernet_engine.c)</span>
+              </div>
+              <h2 class="text-xl font-extrabold tracking-tight">Laboratory Merging &amp; CIDR Supernetting Engine</h2>
+              <div class="p-4 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 text-xs text-blue-100/95 leading-relaxed">
+                <span class="font-extrabold text-white text-sm block mb-1">📖 Formal Engineering Definition:</span>
+                "Supernetting is the process of combining multiple smaller, contiguous IP networks into a single, larger network (called a supernet) using Classless Inter-Domain Routing (CIDR) notation."
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Supernet Split / Revert Banner in Supernetting Tab -->
+          <div id="supernet-split-banner" class="hidden p-4 rounded-2xl border border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"></div>
+
+          <!-- PRIMARY INTERACTIVE WORKFLOW: WHICH LABS DO YOU WANT TO MERGE? -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-7 shadow-card space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h3 class="text-base font-extrabold text-slate-900 flex items-center space-x-2">
+                  <span>🔀</span>
+                  <span>Which laboratories do you want to merge into a Supernet?</span>
+                </h3>
+                <p class="text-xs text-slate-500 mt-0.5">Select the check-boxes of the laboratories you want to consolidate into a single supernet prefix</p>
+              </div>
+
+              <!-- Dynamic Contiguous Presets Bar -->
+              <div id="supernet-presets-container" class="flex items-center space-x-2 flex-wrap gap-y-2">
+                <button onclick="selectAllSupernetLabs(true)" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg transition cursor-pointer">
+                  Select All
+                </button>
+                <button onclick="selectFirstNSupernetLabs(2)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition cursor-pointer">
+                  Select First 2
+                </button>
+                <button onclick="selectAllSupernetLabs(false)" class="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 text-xs font-bold rounded-lg transition cursor-pointer">
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <!-- Real-Time Contiguity Status Banner -->
+            <div id="supernet-contiguity-banner" class="p-3.5 rounded-xl border border-blue-200 bg-blue-50/70 transition-all">
+              <div class="flex items-center space-x-2 text-blue-800 text-xs font-semibold">
+                <span>ℹ️</span>
+                <span>Select any contiguous laboratories below to aggregate them into a CIDR Supernet.</span>
+              </div>
+            </div>
+
+            <!-- Dynamic Campus Labs Grid for Merging Selection -->
+            <div id="supernet-labs-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              <!-- Populated dynamically with lab cards -->
+            </div>
+
+            <!-- Action Bar -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-slate-100">
+              <div class="flex items-center space-x-2">
+                <span class="text-xs font-bold text-slate-700">Selection:</span>
+                <span id="supernet-selected-count-badge" class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-blue-100 text-blue-800">
+                  0 Laboratories Selected
+                </span>
+              </div>
+
+              <button id="btn-merge-supernet" onclick="mergeSelectedLabs()" class="w-full sm:w-auto px-7 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-pill transition cursor-pointer flex items-center justify-center space-x-2">
+                <span>⚡</span>
+                <span id="btn-merge-supernet-text">Merge Selected Contiguous Labs into a Supernet</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Merged Supernet Results Container -->
+          <div id="supernet-result-container" class="space-y-6">
+            <!-- Populated dynamically when labs are merged -->
+          </div>
+
+          <!-- Collapsible Manual / Custom Subnets Section -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-card space-y-4">
+            <button onclick="toggleManualSupernetSection()" class="w-full flex items-center justify-between text-left cursor-pointer">
+              <div>
+                <span class="text-xs font-bold text-slate-800 uppercase tracking-wider block">Manual / Custom Subnets Merging Tool</span>
+                <span class="text-[11px] text-slate-400 font-medium mt-0.5 block">Want to merge custom arbitrary IP prefixes outside current campus laboratories? Click to expand</span>
+              </div>
+              <span id="manual-supernet-toggle-icon" class="text-slate-400 font-bold text-sm">▼ Expand</span>
+            </button>
+
+            <div id="manual-supernet-panel" class="hidden space-y-4 pt-3 border-t border-slate-100">
+              <div class="flex items-center justify-between flex-wrap gap-2">
+                <label class="block text-xs font-bold text-slate-700">Enter custom subnets (one per line):</label>
+                <div class="flex items-center space-x-2">
+                  <button onclick="loadSupernetPreset('preset4c')" class="text-[11px] text-blue-600 hover:underline font-bold cursor-pointer">4 Class-C Preset</button>
+                  <span class="text-slate-300">•</span>
+                  <button onclick="loadSupernetPreset('preset8c')" class="text-[11px] text-indigo-600 hover:underline font-bold cursor-pointer">8 ISP Net Preset</button>
+                  <span class="text-slate-300">•</span>
+                  <button onclick="loadSupernetPreset('preset2c')" class="text-[11px] text-emerald-600 hover:underline font-bold cursor-pointer">2 Subnet Preset</button>
+                </div>
+              </div>
+              <textarea id="supernet-input" rows="3" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold mono text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 transition" placeholder="192.168.0.0/24&#10;192.168.1.0/24&#10;192.168.2.0/24&#10;192.168.3.0/24"></textarea>
+              <div class="flex justify-end">
+                <button onclick="runManualSupernetCalculation()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer">
+                  Merge Custom Subnets
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 5: 32-BIT BINARY VISUALIZER -->
+        <!-- ============================================================= -->
+        <div id="tab-content-binary" class="hidden space-y-7">
+          
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-card flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3 w-full md:w-auto">
+              <label class="text-xs font-bold text-slate-700">IPv4 &amp; Prefix:</label>
+              <input type="text" id="bin-input" value="192.168.0.1/24" class="w-full md:w-64 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 mono focus:outline-none focus:border-blue-500">
+              <button onclick="calculateBinary()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-pill-soft cursor-pointer">
+                Decompose
+              </button>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-xs text-slate-400 font-medium">Presets:</span>
+              <button onclick="setBinPreset('192.168.0.1/24')" class="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 border border-slate-200 font-mono rounded-lg cursor-pointer">192.168.0.1/24</button>
+              <button onclick="setBinPreset('10.50.1.65/25')" class="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 border border-slate-200 font-mono rounded-lg cursor-pointer">10.50.1.65/25</button>
+              <button onclick="setBinPreset('172.16.50.10/20')" class="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 border border-slate-200 font-mono rounded-lg cursor-pointer">172.16.50.10/20</button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-7 shadow-card space-y-5">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800">32-Bit Binary IPv4 Cell Decomposition</h3>
+              <div class="flex items-center space-x-4 text-xs font-medium">
+                <span class="flex items-center space-x-1.5"><span class="w-3 h-3 bg-blue-600 rounded"></span><span class="text-slate-700">Network</span></span>
+                <span class="flex items-center space-x-1.5"><span class="w-3 h-3 bg-indigo-500 rounded"></span><span class="text-slate-700">Subnet</span></span>
+                <span class="flex items-center space-x-1.5"><span class="w-3 h-3 bg-slate-200 rounded"></span><span class="text-slate-700">Host</span></span>
+              </div>
+            </div>
+            <div class="overflow-x-auto pb-1 custom-scrollbar">
+              <div id="binary-grid" class="min-w-fit p-5 font-mono flex items-center justify-center gap-2 sm:gap-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl flex-nowrap">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+            <div class="text-xs font-medium text-slate-500 text-center" id="binary-prefix-desc">
+              Loading binary prefix analysis...
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-7 shadow-card space-y-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800">Bitwise Subnet Algebra Proof</h3>
+            <div class="bg-slate-900 text-slate-200 p-5 rounded-xl font-mono text-xs leading-relaxed overflow-x-auto custom-scrollbar border border-slate-800" id="binary-math-breakdown">
+              <!-- Populated dynamically -->
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div class="p-4 border border-slate-200 bg-slate-50/70 rounded-xl text-center">
+                <span class="block text-[10px] font-bold text-slate-400 uppercase">First Usable</span>
+                <span class="text-base font-bold text-slate-900 font-mono mt-0.5 block" id="bin-first-host">0.0.0.0</span>
+              </div>
+              <div class="p-4 border border-slate-200 bg-slate-50/70 rounded-xl text-center">
+                <span class="block text-[10px] font-bold text-slate-400 uppercase">Last Usable</span>
+                <span class="text-base font-bold text-slate-900 font-mono mt-0.5 block" id="bin-last-host">0.0.0.0</span>
+              </div>
+              <div class="p-4 border border-slate-200 bg-slate-50/70 rounded-xl text-center">
+                <span class="block text-[10px] font-bold text-slate-400 uppercase">Usable Capacity</span>
+                <span class="text-base font-bold text-blue-600 font-mono mt-0.5 block" id="bin-usable-count">0 Hosts</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 6: PACKET REACHABILITY DIAGNOSTICS -->
+        <!-- ============================================================= -->
+        <div id="tab-content-reachability" class="hidden space-y-7">
+          
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-7 shadow-card space-y-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Host A Endpoint</label>
+                <input type="text" id="reach-ip-a" value="192.168.0.15/26" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 mono focus:outline-none focus:border-blue-500">
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Host B Endpoint</label>
+                <input type="text" id="reach-ip-b" value="192.168.0.70/26" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 mono focus:outline-none focus:border-blue-500">
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-2 flex-wrap gap-2">
+              <div class="flex items-center space-x-2">
+                <button onclick="setReachScenario('192.168.0.15/26', '192.168.0.25/26')" class="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 border border-slate-200 rounded-lg cursor-pointer">Scenario 1: L2 Switched (Same Subnet)</button>
+                <button onclick="setReachScenario('192.168.0.15/26', '192.168.0.70/26')" class="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 border border-slate-200 rounded-lg cursor-pointer">Scenario 2: L3 Routed (Different Subnets)</button>
+              </div>
+              <button onclick="runReachabilityCheck()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-pill-soft transition cursor-pointer">
+                Diagnose Packet Path
+              </button>
+            </div>
+          </div>
+
+          <div id="reach-result-card" class="bg-white rounded-2xl border border-slate-200/80 p-7 shadow-card space-y-4">
+            <!-- Populated dynamically -->
+          </div>
+
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 7: SINGLE SUBNET CALCULATOR -->
+        <!-- ============================================================= -->
+        <div id="tab-content-calculator" class="hidden space-y-7">
+          
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-card flex items-center space-x-4 flex-wrap gap-y-2">
+            <label class="text-xs font-bold text-slate-700">IPv4 &amp; Prefix:</label>
+            <input type="text" id="calc-input" value="192.168.0.1/24" class="w-72 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 mono focus:outline-none focus:border-blue-500">
+            <button onclick="runSingleCalc()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-pill-soft transition cursor-pointer">
+              Calculate Subnet
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-7" id="calc-results-grid">
+            <!-- Populated dynamically -->
+          </div>
+
+          <!-- Built-in CIDR Quick Reference Cheat Sheet -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-card space-y-4">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">CIDR IPv4 Subnet Mask Cheat Sheet (/8 to /30)</h4>
+            <div class="overflow-x-auto custom-scrollbar max-h-72">
+              <table class="w-full text-left text-xs font-mono">
+                <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] border-b border-slate-100">
+                  <tr>
+                    <th class="px-4 py-2">Prefix</th>
+                    <th class="px-4 py-2">Subnet Mask</th>
+                    <th class="px-4 py-2">Wildcard Mask</th>
+                    <th class="px-4 py-2 text-center">Total Addresses</th>
+                    <th class="px-4 py-2 text-center">Usable Hosts</th>
+                    <th class="px-4 py-2">Class</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-slate-700">
+                  <tr><td class="px-4 py-1.5 font-bold text-blue-600">/30</td><td class="px-4 py-1.5">255.255.255.252</td><td class="px-4 py-1.5 text-slate-400">0.0.0.3</td><td class="px-4 py-1.5 text-center">4</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">2</td><td class="px-4 py-1.5 text-slate-400">P2P Link</td></tr>
+                  <tr><td class="px-4 py-1.5 font-bold text-blue-600">/29</td><td class="px-4 py-1.5">255.255.255.248</td><td class="px-4 py-1.5 text-slate-400">0.0.0.7</td><td class="px-4 py-1.5 text-center">8</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">6</td><td class="px-4 py-1.5 text-slate-400">Class C</td></tr>
+                  <tr><td class="px-4 py-1.5 font-bold text-blue-600">/28</td><td class="px-4 py-1.5">255.255.255.240</td><td class="px-4 py-1.5 text-slate-400">0.0.0.15</td><td class="px-4 py-1.5 text-center">16</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">14</td><td class="px-4 py-1.5 text-slate-400">Class C</td></tr>
+                  <tr><td class="px-4 py-1.5 font-bold text-blue-600">/27</td><td class="px-4 py-1.5">255.255.255.224</td><td class="px-4 py-1.5 text-slate-400">0.0.0.31</td><td class="px-4 py-1.5 text-center">32</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">30</td><td class="px-4 py-1.5 text-slate-400">Class C</td></tr>
+                  <tr><td class="px-4 py-1.5 font-bold text-blue-600">/26</td><td class="px-4 py-1.5">255.255.255.192</td><td class="px-4 py-1.5 text-slate-400">0.0.0.63</td><td class="px-4 py-1.5 text-center">64</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">62</td><td class="px-4 py-1.5 text-slate-400">Class C</td></tr>
+                  <tr><td class="px-4 py-1.5 font-bold text-blue-600">/25</td><td class="px-4 py-1.5">255.255.255.128</td><td class="px-4 py-1.5 text-slate-400">0.0.0.127</td><td class="px-4 py-1.5 text-center">128</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">126</td><td class="px-4 py-1.5 text-slate-400">Class C</td></tr>
+                  <tr class="bg-blue-50/40"><td class="px-4 py-1.5 font-bold text-blue-600">/24</td><td class="px-4 py-1.5 font-bold">255.255.255.0</td><td class="px-4 py-1.5 text-slate-400">0.0.0.255</td><td class="px-4 py-1.5 text-center font-bold">256</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">254</td><td class="px-4 py-1.5 font-bold text-blue-600">Standard Class C</td></tr>
+                  <tr><td class="px-4 py-1.5 font-bold text-blue-600">/23</td><td class="px-4 py-1.5">255.255.254.0</td><td class="px-4 py-1.5 text-slate-400">0.0.1.255</td><td class="px-4 py-1.5 text-center">512</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">510</td><td class="px-4 py-1.5 text-slate-400">Class B/C Supernet</td></tr>
+                  <tr><td class="px-4 py-1.5 font-bold text-blue-600">/22</td><td class="px-4 py-1.5">255.255.252.0</td><td class="px-4 py-1.5 text-slate-400">0.0.3.255</td><td class="px-4 py-1.5 text-center">1,024</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">1,022</td><td class="px-4 py-1.5 text-slate-400">Class B/C Supernet</td></tr>
+                  <tr><td class="px-4 py-1.5 font-bold text-blue-600">/20</td><td class="px-4 py-1.5">255.255.240.0</td><td class="px-4 py-1.5 text-slate-400">0.0.15.255</td><td class="px-4 py-1.5 text-center">4,096</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">4,094</td><td class="px-4 py-1.5 text-slate-400">Class B Subnet</td></tr>
+                  <tr class="bg-blue-50/40"><td class="px-4 py-1.5 font-bold text-blue-600">/16</td><td class="px-4 py-1.5 font-bold">255.255.0.0</td><td class="px-4 py-1.5 text-slate-400">0.0.255.255</td><td class="px-4 py-1.5 text-center font-bold">65,536</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">65,534</td><td class="px-4 py-1.5 font-bold text-blue-600">Standard Class B</td></tr>
+                  <tr class="bg-blue-50/40"><td class="px-4 py-1.5 font-bold text-blue-600">/8</td><td class="px-4 py-1.5 font-bold">255.0.0.0</td><td class="px-4 py-1.5 text-slate-400">0.255.255.255</td><td class="px-4 py-1.5 text-center font-bold">16,777,216</td><td class="px-4 py-1.5 text-center font-bold text-emerald-600">16,777,214</td><td class="px-4 py-1.5 font-bold text-blue-600">Standard Class A</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+      </main>
+
+      <!-- Clean Footer -->
+      <footer class="border-t border-slate-200/80 bg-white px-8 py-3.5 flex items-center justify-between text-xs text-slate-400">
+        <div>NetLab-Pro • Campus Network Subnet Architect &amp; Dynamic VLSM Suite</div>
+        <div>Computer Networks Mini Project • Active in Browser</div>
+      </footer>
+
+    </div>
+
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- JAVASCRIPT APPLICATION LOGIC (ALL 7 TABS 100% WORKING) -->
+  <!-- ===================================================================== -->
+  <script>
+    let appState = null;
+
+    // Toast Notification Utility
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      let bg = 'bg-slate-900 text-white';
+      let icon = 'ℹ️';
+      if (type === 'success') { bg = 'bg-emerald-600 text-white'; icon = '✅'; }
+      if (type === 'error') { bg = 'bg-rose-600 text-white'; icon = '⚠️'; }
+      if (type === 'warning') { bg = 'bg-amber-600 text-white'; icon = '🔔'; }
+
+      toast.className = `${bg} px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center space-x-2 animate-toast pointer-events-auto`;
+      toast.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    // Tab Switching (7 Core Pages - Robust & Immediate)
+    function switchTab(tabId) {
+      const tabs = ['vlsm', 'inventory', 'topology', 'supernetting', 'binary', 'reachability', 'calculator'];
+      tabs.forEach(t => {
+        const navBtn = document.getElementById(`nav-${t}`);
+        const content = document.getElementById(`tab-content-${t}`);
+        if (!navBtn || !content) return;
+        if (t === tabId) {
+          navBtn.className = 'nav-item-active w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer';
+          content.classList.remove('hidden');
+        } else {
+          navBtn.className = 'w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer';
+          content.classList.add('hidden');
+        }
+      });
+
+      // Trigger automatic tab loaders
+      try {
+        if (tabId === 'inventory') loadLabInventory();
+        if (tabId === 'topology') loadTopologyNetwork();
+        if (tabId === 'supernetting') populateSupernetLabsGrid();
+        if (tabId === 'binary') calculateBinary();
+        if (tabId === 'reachability') runReachabilityCheck();
+        if (tabId === 'calculator') runSingleCalc();
+      } catch (err) {
+        console.error('Error switching tab to', tabId, err);
+      }
+    }
+
+    // =========================================================================
+    // USER SETUP WIZARD (Direct User Inputs: Labs, Names, Systems)
+    // =========================================================================
+    function openSetupWizard(targetCount) {
+      if (appState) {
+        document.getElementById('wiz-base-ip').value = appState.base_ip || '192.168.0.0';
+        document.getElementById('wiz-base-cidr').value = appState.base_cidr || 24;
+        const currentCount = targetCount ? parseInt(targetCount) : ((appState.labs && appState.labs.length) ? appState.labs.length : 3);
+        document.getElementById('wiz-lab-count').value = currentCount;
+        updateWizardLabRows(currentCount);
+      } else {
+        const count = targetCount ? parseInt(targetCount) : 3;
+        document.getElementById('wiz-lab-count').value = count;
+        updateWizardLabRows(count);
+      }
+      document.getElementById('modal-setup-wizard').classList.remove('hidden');
+    }
+
+    function configureLabsByCount() {
+      const numInput = document.getElementById('input-num-labs');
+      const count = parseInt(numInput ? numInput.value : 3) || 3;
+      openSetupWizard(count);
+    }
+
+    async function quickGenerateNLabs() {
+      const numInput = document.getElementById('input-num-labs');
+      const count = parseInt(numInput ? numInput.value : 3) || 3;
+      const baseIp = document.getElementById('input-base-ip').value.trim();
+      const baseCidr = parseInt(document.getElementById('input-base-cidr').value);
+
+      try {
+        const res = await fetch('/api/labs/setup-n', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ num_labs: count, base_ip: baseIp, base_cidr: baseCidr })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Successfully configured ${count} laboratories!`, 'success');
+          fetchState();
+        } else {
+          showToast(data.error || 'Failed to configure laboratories', 'error');
+        }
+      } catch (err) {
+        showToast('Error configuring labs', 'error');
+      }
+    }
+
+    function closeSetupWizard() {
+      document.getElementById('modal-setup-wizard').classList.add('hidden');
+    }
+
+    function updateWizardLabRows(count) {
+      let n = parseInt(count) || 1;
+      n = Math.max(1, Math.min(n, 32));
+      const tbody = document.getElementById('wiz-tbody');
+      tbody.innerHTML = '';
+
+      const defaultNames = ["Computer Networks Lab", "Web Technologies Lab", "IoT Systems Lab", "Data Science Lab", "AI & Robotics Lab", "Systems Programming Lab"];
+
+      for (let i = 1; i <= n; i++) {
+        let existing = (appState && appState.labs && (i - 1) < appState.labs.length) ? appState.labs[i - 1] : null;
+        let defName = existing ? existing.name : (i <= defaultNames.length ? defaultNames[i - 1] : `Computer Lab ${i}`);
+        let defDept = existing ? existing.department : `Department Wing ${String.fromCharCode(65 + ((i - 1) % 6))}`;
+        let defPcs = existing ? existing.workstations : Math.max(15, 75 - ((i - 1) * 15));
+        let defGr = existing ? existing.growth_percent : 10;
+        let defVlan = existing ? existing.vlan_id : (i * 10);
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition';
+        tr.innerHTML = `
+          <td class="px-4 py-2 font-bold text-slate-400">#${i}</td>
+          <td class="px-4 py-2">
+            <input type="text" class="wiz-row-name w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500" value="${defName}" placeholder="Lab Name">
+          </td>
+          <td class="px-4 py-2">
+            <input type="text" class="wiz-row-dept w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500" value="${defDept}" placeholder="Department / Wing">
+          </td>
+          <td class="px-4 py-2 text-center">
+            <input type="number" min="1" max="10000" oninput="updateWizardCapacityHint()" class="wiz-row-pcs w-20 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center mono text-slate-800 focus:outline-none focus:border-blue-500" value="${defPcs}">
+          </td>
+          <td class="px-4 py-2 text-center">
+            <input type="number" min="0" max="100" oninput="updateWizardCapacityHint()" class="wiz-row-growth w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center mono text-slate-800 focus:outline-none focus:border-blue-500" value="${defGr}">
+          </td>
+          <td class="px-4 py-2 text-center">
+            <input type="number" min="1" max="4094" class="wiz-row-vlan w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center mono text-slate-800 focus:outline-none focus:border-blue-500" value="${defVlan}">
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+      updateWizardCapacityHint();
+    }
+
+    function updateWizardCapacityHint() {
+      const rows = document.querySelectorAll('#wiz-tbody tr');
+      let totalNeeded = 0;
+      let totalPcs = 0;
+
+      rows.forEach(tr => {
+        const pcs = parseInt(tr.querySelector('.wiz-row-pcs').value) || 0;
+        const gr = parseInt(tr.querySelector('.wiz-row-growth').value) || 0;
+        totalPcs += pcs;
+        const eff = Math.max(2, Math.ceil(pcs * (1.0 + gr / 100.0)));
+        let h = 2;
+        while (h < 31 && ((1 << h) - 2) < eff) h++;
+        totalNeeded += (1 << h);
+      });
+
+      const cidrSelect = document.getElementById('wiz-base-cidr');
+      const baseCidr = parseInt(cidrSelect.value) || 24;
+      const baseCap = Math.pow(2, 32 - baseCidr);
+
+      let neededCap = 1;
+      while (neededCap < Math.max(4, totalNeeded)) neededCap <<= 1;
+      const recCidr = 32 - Math.round(Math.log2(neededCap));
+
+      const hintText = document.getElementById('wiz-hint-text');
+      const hintBadge = document.getElementById('wiz-hint-badge');
+      const container = document.getElementById('wiz-capacity-hint');
+
+      if (totalNeeded > baseCap) {
+        if (container) container.className = 'p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs';
+        if (hintText) hintText.innerHTML = `⚠️ <strong class="text-amber-800">${rows.length} labs (${totalPcs} PCs) require ${totalNeeded.toLocaleString()} IPs</strong>, exceeding /${baseCidr} (${baseCap} IPs). Required prefix: <strong class="text-blue-700">/${recCidr}</strong>`;
+        if (hintBadge) {
+          hintBadge.className = 'px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white cursor-pointer transition';
+          hintBadge.textContent = `Auto-Set to /${recCidr}`;
+          hintBadge.onclick = () => {
+            cidrSelect.value = recCidr;
+            updateWizardCapacityHint();
+          };
+        }
+      } else {
+        if (container) container.className = 'p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs';
+        if (hintText) hintText.innerHTML = `✅ <strong class="text-emerald-800">${rows.length} labs (${totalPcs} PCs)</strong> fit inside /${baseCidr} (${totalNeeded.toLocaleString()} / ${baseCap.toLocaleString()} IPs).`;
+        if (hintBadge) {
+          hintBadge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white';
+          hintBadge.textContent = 'Fits Capacity';
+          hintBadge.onclick = null;
+        }
+      }
+    }
+
+    async function submitSetupWizard() {
+      const baseIp = document.getElementById('wiz-base-ip').value.trim();
+      const baseCidr = parseInt(document.getElementById('wiz-base-cidr').value);
+
+      const rows = document.querySelectorAll('#wiz-tbody tr');
+      const labs = [];
+
+      rows.forEach((tr, idx) => {
+        const name = tr.querySelector('.wiz-row-name').value.trim() || `Laboratory ${idx + 1}`;
+        const dept = tr.querySelector('.wiz-row-dept').value.trim() || `Department Wing`;
+        const pcs = parseInt(tr.querySelector('.wiz-row-pcs').value) || 30;
+        const growth = parseInt(tr.querySelector('.wiz-row-growth').value) || 10;
+        const vlan = parseInt(tr.querySelector('.wiz-row-vlan').value) || ((idx + 1) * 10);
+
+        labs.push({
+          name: name,
+          department: dept,
+          workstations: pcs,
+          growth_percent: growth,
+          vlan_id: vlan
+        });
+      });
+
+      try {
+        const res = await fetch('/api/setup', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            base_ip: baseIp,
+            base_cidr: baseCidr,
+            labs: labs,
+            auto_expand: true
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (data.notice) {
+            showToast(data.notice, 'info');
+          } else {
+            showToast(`Configured ${labs.length} laboratories and allocated subnets!`, 'success');
+          }
+          closeSetupWizard();
+          fetchState();
+        } else {
+          showToast(data.error || 'Setup failed', 'error');
+        }
+      } catch (e) {
+        showToast('Error configuring campus network', 'error');
+      }
+    }
+
+    // =========================================================================
+    // STATE FETCH & UI RENDERING
+    // =========================================================================
+    async function fetchState() {
+      try {
+        const res = await fetch('/api/state');
+        appState = await res.json();
+        updateUI();
+      } catch (err) {
+        console.error('Error fetching state:', err);
+      }
+    }
+
+    function updateUI() {
+      if (!appState) return;
+
+      document.getElementById('input-base-ip').value = appState.base_ip;
+      document.getElementById('input-base-cidr').value = appState.base_cidr;
+      const numInput = document.getElementById('input-num-labs');
+      if (numInput && appState.labs) numInput.value = appState.labs.length;
+      document.getElementById('scope-ip-display').textContent = `${appState.base_ip} / ${appState.base_cidr}`;
+      document.getElementById('metric-workstations').textContent = `${appState.total_requested_hosts} PCs`;
+      document.getElementById('metric-allocated').textContent = `${appState.total_allocated_blocks.toLocaleString()} IPs`;
+      document.getElementById('metric-usable').textContent = `${appState.total_usable_hosts.toLocaleString()} Usable Slots`;
+      document.getElementById('metric-nextfree').textContent = appState.next_free_subnet;
+      document.getElementById('metric-efficiency').textContent = `${appState.overall_efficiency} %`;
+      document.getElementById('table-summary-tag').textContent = `${appState.labs.length} SUBNETS`;
+      document.getElementById('nav-count-badge').textContent = appState.labs.length;
+
+      // Update Native C Backend Status Badge
+      if (appState.engine_status) {
+        const engBadge = document.getElementById('engine-status-badge');
+        const sideVers = document.getElementById('sidebar-c-version');
+        if (engBadge && appState.engine_status.is_c_active) {
+          engBadge.textContent = '⚡ Backend: C Native Core (netlab_core.dll) | Frontend: Python';
+        }
+        if (sideVers && appState.engine_status.version) {
+          sideVers.textContent = 'netlab_core.dll (MSVC 64-bit)';
+        }
+      }
+
+      // Update Alert Banner for Exhaustion / Warnings
+      const alertBanner = document.getElementById('vlsm-alert-banner');
+      if (alertBanner) {
+        if (!appState.is_valid && appState.error_reason) {
+          const recCidr = appState.recommended_cidr || (appState.base_cidr > 16 ? appState.base_cidr - 1 : 16);
+          const recCapacity = Math.pow(2, 32 - recCidr);
+          alertBanner.className = 'mx-7 mt-5 p-4 bg-rose-50 border border-rose-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs';
+          alertBanner.innerHTML = `
+            <div class="flex items-start space-x-3">
+              <span class="text-xl">⚠️</span>
+              <div>
+                <span class="font-extrabold text-rose-800 block text-sm">Base Network Space Exhausted</span>
+                <span class="text-rose-700 font-medium">${appState.error_reason}</span>
+              </div>
+            </div>
+            <button onclick="autoExpandBaseScope(${recCidr})" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg transition whitespace-nowrap shadow-sm cursor-pointer flex items-center space-x-1.5 self-start sm:self-auto">
+              <span>⚡</span>
+              <span>Auto-Expand Scope to /${recCidr} (${recCapacity.toLocaleString()} IPs)</span>
+            </button>
+          `;
+          alertBanner.classList.remove('hidden');
+        } else {
+          alertBanner.classList.add('hidden');
+          alertBanner.innerHTML = '';
+        }
+      }
+
+      // Update Gauge Bar
+      const totalCap = appState.total_campus_capacity || 256;
+      const usedPct = Math.min(100, Math.max(0.5, ((appState.total_allocated_blocks / totalCap) * 100)));
+      const freePct = 100 - usedPct;
+      document.getElementById('gauge-used').style.width = `${usedPct}%`;
+      document.getElementById('gauge-free').style.width = `${freePct}%`;
+      document.getElementById('utilization-label').textContent = `Allocated: ${appState.total_allocated_blocks.toLocaleString()} IPs (${usedPct.toFixed(1)}%)`;
+      document.getElementById('gauge-used-txt').textContent = `Allocated Blocks (${appState.total_allocated_blocks.toLocaleString()} IPs)`;
+      document.getElementById('gauge-free-txt').textContent = `Free IPs Remaining (${appState.free_ips_remaining.toLocaleString()} IPs)`;
+
+      // VLSM Table Population
+      renderVlsmTable(appState.labs);
+
+      // Lab selector for Workstations
+      const select = document.getElementById('select-inv-lab');
+      if (select) {
+        const currVal = select.value;
+        select.innerHTML = '';
+        appState.labs.forEach(lab => {
+          const opt = document.createElement('option');
+          opt.value = lab.id;
+          opt.textContent = `${lab.id}. ${lab.name} (${lab.workstations} PCs, VLAN ${lab.vlan_id})`;
+          select.appendChild(opt);
+        });
+        if (currVal && appState.labs.some(l => l.id == currVal)) {
+          select.value = currVal;
+        }
+        loadLabInventory();
+      }
+
+      // Supernet Active / Revert Banner in VLSM Tab
+      const vlsmSupBanner = document.getElementById('vlsm-supernet-banner');
+      if (vlsmSupBanner) {
+        if (appState.has_merge_history && appState.last_merge) {
+          const m = appState.last_merge;
+          vlsmSupBanner.innerHTML = `
+            <div class="flex items-center space-x-2.5">
+              <span class="text-xl">⚡</span>
+              <div>
+                <span class="text-xs font-extrabold text-purple-900 block">Active Consolidated Supernet: ${m.merged_name} (${m.supernet_str})</span>
+                <span class="text-[11px] text-purple-700">Consolidated from ${m.merged_ids ? m.merged_ids.length : 2} laboratories. Subnet table is actively updated.</span>
+              </div>
+            </div>
+            <button onclick="splitSupernetBack()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-extrabold rounded-xl shadow-xs transition cursor-pointer flex items-center space-x-1.5 shrink-0">
+              <span>↩️</span>
+              <span>Split Back to Separate Labs</span>
+            </button>
+          `;
+          vlsmSupBanner.classList.remove('hidden');
+        } else {
+          vlsmSupBanner.classList.add('hidden');
+          vlsmSupBanner.innerHTML = '';
+        }
+      }
+
+      // Supernet Active / Revert Banner in Supernetting Tab
+      const supSplitBanner = document.getElementById('supernet-split-banner');
+      if (supSplitBanner) {
+        if (appState.has_merge_history && appState.last_merge) {
+          const m = appState.last_merge;
+          supSplitBanner.innerHTML = `
+            <div class="space-y-0.5">
+              <div class="flex items-center space-x-2 text-xs font-extrabold text-purple-900">
+                <span class="text-base">⚡</span>
+                <span>Active Supernet Applied: "${m.merged_name}" (${m.supernet_str})</span>
+              </div>
+              <p class="text-[11px] text-purple-700">The campus subnet table currently contains this consolidated supernet. Click Split to restore your previous individual laboratories.</p>
+            </div>
+            <button onclick="splitSupernetBack()" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center space-x-2 shrink-0">
+              <span>↩️</span>
+              <span>Split Supernet Back to Separate Labs</span>
+            </button>
+          `;
+          supSplitBanner.classList.remove('hidden');
+        } else {
+          supSplitBanner.classList.add('hidden');
+          supSplitBanner.innerHTML = '';
+        }
+      }
+
+      // Populate CIDR Supernetting laboratory selection cards
+      populateSupernetLabsGrid();
+    }
+
+    async function autoExpandBaseScope(newCidr) {
+      const baseIp = document.getElementById('input-base-ip').value.trim();
+      document.getElementById('input-base-cidr').value = newCidr;
+      try {
+        const res = await fetch('/api/base/update', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ base_ip: baseIp, base_cidr: newCidr })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Expanded base scope to /${newCidr}! Recalculating allocations...`, 'success');
+          fetchState();
+        } else {
+          showToast(data.error || 'Failed to expand base scope', 'error');
+        }
+      } catch (err) {
+        showToast('Error expanding base scope', 'error');
+      }
+    }
+
+    function renderVlsmTable(labs) {
+      const tbody = document.getElementById('vlsm-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (!labs || labs.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="11" class="px-6 py-8 text-center text-slate-400 font-semibold">
+              No laboratories configured. Click "Configure Campus Labs (User Input)" above to define your laboratories!
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      labs.forEach((lab, idx) => {
+        const isAllocated = (lab.is_allocated !== false && !String(lab.subnet_str).includes('0.0.0.0') && !String(lab.subnet_str).includes('Exhausted') && !String(lab.subnet_str).includes('Unallocated'));
+        const tr = document.createElement('tr');
+        tr.className = isAllocated ? 'hover:bg-slate-50/80 transition' : 'bg-rose-50/40 hover:bg-rose-50 transition border-l-4 border-rose-500';
+
+        const dotColor = isAllocated ? 'bg-emerald-500' : 'bg-rose-500';
+        const subnetDisplay = isAllocated 
+          ? `<span class="font-bold text-blue-600">${lab.subnet_str}</span>` 
+          : `<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-700">⚠️ Needs /${lab.allocated_cidr} (${lab.block_size} IPs)</span>`;
+        const rangeDisplay = isAllocated 
+          ? lab.range_str 
+          : `<span class="text-rose-600 font-semibold text-xs">Unallocated (Space Exhausted)</span>`;
+        const gwDisplay = isAllocated ? lab.gateway_ip_str : `--`;
+        const effDisplay = isAllocated ? `${lab.efficiency_pct}%` : `--`;
+
+        const isSupernet = Boolean(lab.is_supernet);
+        const supernetBadge = isSupernet 
+          ? `<span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200 inline-block mr-1">⚡ Supernet</span>` 
+          : '';
+        const supernetSub = isSupernet && lab.component_labs_count
+          ? `<div class="text-[10px] text-purple-600 font-semibold mt-0.5">Consolidated from ${lab.component_labs_count} Labs</div>`
+          : '';
+        const splitBtn = isSupernet
+          ? `<button onclick="splitSupernetBack()" title="Split supernet back to separate labs" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold border border-purple-200 transition cursor-pointer">↩️ Split</button>`
+          : '';
+
+        tr.innerHTML = `
+          <td class="px-5 py-3.5 text-slate-400 font-bold">#${lab.id}</td>
+          <td class="px-5 py-3.5 font-bold text-slate-900 font-sans">
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full ${dotColor} inline-block"></span>
+              ${supernetBadge}
+              <span>${lab.name}</span>
+            </div>
+            ${supernetSub}
+          </td>
+          <td class="px-5 py-3.5 text-slate-500 font-sans">${lab.department}</td>
+          <td class="px-5 py-3.5 text-center font-bold text-slate-800">${lab.workstations} PCs</td>
+          <td class="px-5 py-3.5 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700">VLAN ${lab.vlan_id}</span></td>
+          <td class="px-5 py-3.5 font-bold">${subnetDisplay}</td>
+          <td class="px-5 py-3.5 text-slate-600">${rangeDisplay}</td>
+          <td class="px-5 py-3.5 font-bold text-slate-800">${gwDisplay}</td>
+          <td class="px-5 py-3.5 text-center font-extrabold text-[#00c076]">${effDisplay}</td>
+          <td class="px-5 py-3.5 text-center space-x-1 whitespace-nowrap">
+            <button onclick="addSystems(${lab.id}, 1)" title="Add 1 PC to this lab" class="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[11px] font-bold transition cursor-pointer">+1</button>
+            <button onclick="addSystems(${lab.id}, 5)" title="Add 5 PCs to this lab" class="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[11px] font-bold transition cursor-pointer">+5</button>
+          </td>
+          <td class="px-5 py-3.5 text-center space-x-1 whitespace-nowrap">
+            ${splitBtn}
+            <button onclick="openEditModal(${lab.id})" title="Edit laboratory" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer">✏️ Edit</button>
+            <button onclick="viewLabDetails(${lab.id})" title="View Workstations" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-bold transition cursor-pointer">👁️ View</button>
+            <button onclick="removeLab(${idx})" title="Remove lab" class="px-2.5 py-1 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg text-xs font-bold transition cursor-pointer">✕</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function handleGlobalSearch(query) {
+      if (!appState) return;
+      const q = query.toLowerCase().trim();
+      if (!q) {
+        renderVlsmTable(appState.labs);
+        return;
+      }
+      const filtered = appState.labs.filter(lab => 
+        lab.name.toLowerCase().includes(q) ||
+        lab.department.toLowerCase().includes(q) ||
+        lab.subnet_str.toLowerCase().includes(q) ||
+        lab.gateway_ip_str.toLowerCase().includes(q) ||
+        `vlan ${lab.vlan_id}`.toLowerCase().includes(q)
+      );
+      renderVlsmTable(filtered);
+    }
+
+    // Add Systems to Lab (Inline +1 / +5)
+    async function addSystems(labId, count) {
+      try {
+        const res = await fetch('/api/labs/add-systems', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ lab_id: labId, count: count })
+        });
+        const data = await res.json();
+        if (data.success) {
+          const r = data.result;
+          if (r.expanded) {
+            showToast(`⚠️ Subnet Auto-Scaled! Lab #${labId} expanded to /${r.new_cidr} (${r.new_workstations} PCs)`, 'warning');
+          } else {
+            showToast(`Added ${count} PC(s) to Lab #${labId} (${r.new_workstations} total)`, 'success');
+          }
+          fetchState();
+        } else {
+          showToast(data.error || 'Failed to add systems', 'error');
+        }
+      } catch (e) {
+        showToast('Error adding systems', 'error');
+      }
+    }
+
+    function addSystemsCurrentLab(count) {
+      const select = document.getElementById('select-inv-lab');
+      if (select && select.value) {
+        addSystems(parseInt(select.value), count);
+      }
+    }
+
+    // Edit Lab Modal Handlers
+    function openEditModal(labId) {
+      const lab = appState.labs.find(l => l.id === labId);
+      if (!lab) return;
+
+      document.getElementById('edit-lab-id').value = lab.id;
+      document.getElementById('edit-lab-name').value = lab.name;
+      document.getElementById('edit-lab-dept').value = lab.department;
+      document.getElementById('edit-lab-pcs').value = lab.workstations;
+      document.getElementById('edit-lab-growth').value = lab.growth_percent;
+      document.getElementById('edit-lab-vlan').value = lab.vlan_id;
+
+      document.getElementById('modal-edit-lab').classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+      document.getElementById('modal-edit-lab').classList.add('hidden');
+    }
+
+    async function saveEditModal() {
+      const labId = parseInt(document.getElementById('edit-lab-id').value);
+      const name = document.getElementById('edit-lab-name').value.trim();
+      const dept = document.getElementById('edit-lab-dept').value.trim();
+      const pcs = parseInt(document.getElementById('edit-lab-pcs').value);
+      const growth = parseInt(document.getElementById('edit-lab-growth').value);
+      const vlan = parseInt(document.getElementById('edit-lab-vlan').value);
+
+      if (!name) {
+        showToast('Please enter a laboratory name.', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/labs/edit', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            id: labId,
+            name: name,
+            department: dept,
+            workstations: pcs,
+            growth_percent: growth,
+            vlan_id: vlan
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Lab #${labId} specifications updated!`, 'success');
+          closeEditModal();
+          fetchState();
+        } else {
+          showToast(data.error || 'Failed to edit lab', 'error');
+        }
+      } catch (e) {
+        showToast('Error editing lab', 'error');
+      }
+    }
+
+    function viewLabDetails(labId) {
+      switchTab('inventory');
+      const select = document.getElementById('select-inv-lab');
+      if (select) {
+        select.value = labId;
+        loadLabInventory();
+      }
+    }
+
+    async function submitAddLab() {
+      const name = document.getElementById('input-lab-name').value.trim();
+      const pcs = document.getElementById('input-lab-pcs').value;
+      const growth = document.getElementById('input-lab-growth').value;
+
+      if (!name) {
+        showToast('Please enter a laboratory name.', 'error');
+        return;
+      }
+
+      await fetch('/api/labs/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          name: name,
+          department: 'Campus Wing',
+          workstations: parseInt(pcs),
+          growth_percent: parseInt(growth),
+          vlan_id: 0
+        })
+      });
+
+      document.getElementById('input-lab-name').value = '';
+      showToast(`Added ${name}!`, 'success');
+      fetchState();
+    }
+
+    async function removeLab(idx) {
+      if (!confirm('Are you sure you want to remove this laboratory?')) return;
+      await fetch('/api/labs/remove', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ index: idx })
+      });
+      showToast('Laboratory removed.', 'info');
+      fetchState();
+    }
+
+    async function clearAllLabs() {
+      if (!confirm('Are you sure you want to clear all laboratories?')) return;
+      await fetch('/api/labs/clear', { method: 'POST' });
+      showToast('All laboratories cleared.', 'info');
+      fetchState();
+    }
+
+    async function applyBaseScope() {
+      const baseIp = document.getElementById('input-base-ip').value.trim();
+      const baseCidr = parseInt(document.getElementById('input-base-cidr').value);
+      try {
+        const res = await fetch('/api/base/update', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ base_ip: baseIp, base_cidr: baseCidr })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          showToast('Scope update notice: ' + (data.error || 'Could not fit all subnets'), 'warning');
+        } else {
+          showToast(`Root scope updated to ${baseIp}/${baseCidr}`, 'success');
+        }
+        fetchState();
+      } catch (e) {
+        showToast('Scope update failed', 'error');
+      }
+    }
+
+
+    // =========================================================================
+    // TAB 2: INVENTORY & WORKSTATIONS
+    // =========================================================================
+    let currentInventoryData = null;
+
+    async function loadLabInventory() {
+      const select = document.getElementById('select-inv-lab');
+      if (!select || !select.value) {
+        // Fallback: if dropdown has options, pick first
+        if (select && select.options.length > 0) {
+          select.selectedIndex = 0;
+        } else {
+          return;
+        }
+      }
+      const labId = select.value;
+
+      try {
+        const res = await fetch(`/api/inventory/${labId}`);
+        const data = await res.json();
+        if (!data.success) return;
+
+        currentInventoryData = data.inventory;
+        const inv = data.inventory;
+
+        document.getElementById('inv-table-title').textContent = `${inv.lab_name} • Workstation Fleet`;
+        document.getElementById('inv-count-badge').textContent = `${inv.inventory.length} ALLOCATED DEVICES`;
+
+        // Scope cards
+        const scopeContainer = document.getElementById('dhcp-scope-cards');
+        scopeContainer.innerHTML = `
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+            <span class="text-[10px] text-slate-400 font-bold uppercase block">Default Gateway (SVI)</span>
+            <span class="text-xs font-bold text-slate-900 font-mono mt-0.5 block">${inv.default_gateway}</span>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+            <span class="text-[10px] text-slate-400 font-bold uppercase block">Subnet Mask</span>
+            <span class="text-xs font-bold text-slate-900 font-mono mt-0.5 block">${inv.subnet_mask}</span>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+            <span class="text-[10px] text-slate-400 font-bold uppercase block">DNS / Cache Server</span>
+            <span class="text-xs font-bold text-blue-600 font-mono mt-0.5 block">${inv.dns_server}</span>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
+            <span class="text-[10px] text-slate-400 font-bold uppercase block">DHCP Lease Range</span>
+            <span class="text-[11px] font-bold text-emerald-600 font-mono mt-0.5 block truncate">${inv.dhcp_pool_start} - ${inv.dhcp_pool_end}</span>
+          </div>
+        `;
+
+        // Cisco CLI
+        document.getElementById('dhcp-cli-snippet').textContent = inv.cisco_dhcp_cli;
+
+        // Inventory table
+        const tbody = document.getElementById('inventory-tbody');
+        tbody.innerHTML = '';
+        inv.inventory.forEach(item => {
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50 transition';
+          let roleBadge = 'bg-slate-100 text-slate-700';
+          if (item.role.includes('Gateway')) roleBadge = 'bg-blue-100 text-blue-700';
+          else if (item.role.includes('Server')) roleBadge = 'bg-purple-100 text-purple-700';
+          else if (item.role.includes('Printer')) roleBadge = 'bg-amber-100 text-amber-700';
+
+          tr.innerHTML = `
+            <td class="px-6 py-2.5 text-slate-400">${item.number}</td>
+            <td class="px-6 py-2.5 font-bold text-slate-800">${item.hostname}</td>
+            <td class="px-6 py-2.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${roleBadge}">${item.role}</span></td>
+            <td class="px-6 py-2.5 font-bold text-blue-600">${item.ip_address}</td>
+            <td class="px-6 py-2.5 text-slate-600">${item.subnet_mask}</td>
+            <td class="px-6 py-2.5 text-slate-800">${item.default_gateway}</td>
+            <td class="px-6 py-2.5 text-slate-500">${item.dns_server}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Error loading inventory:', err);
+      }
+    }
+
+    function copyDhcpCli() {
+      const text = document.getElementById('dhcp-cli-snippet').textContent;
+      navigator.clipboard.writeText(text);
+      showToast('Cisco IOS DHCP Configuration copied to clipboard!', 'success');
+    }
+
+
+    // =========================================================================
+    // TAB 4: CIDR SUPERNETTING & CAMPUS LAB MERGING ENGINE
+    // =========================================================================
+    function ipStrToNum(ip) {
+      if (!ip) return 0;
+      return ip.split('.').reduce((acc, oct) => ((acc << 8) + parseInt(oct, 10)) >>> 0, 0);
+    }
+
+    function checkLabsContiguity(selectedIds) {
+      if (!appState || !appState.labs) return { isContiguous: false, count: 0, reason: 'No labs loaded' };
+      const allocated = appState.labs.filter(l => l.is_allocated !== false && l.network_ip_str && !String(l.subnet_str).includes('Exhausted'));
+      const selectedLabs = allocated.filter(l => selectedIds.includes(l.id))
+                                   .sort((a, b) => ipStrToNum(a.network_ip_str) - ipStrToNum(b.network_ip_str));
+
+      if (selectedLabs.length === 0) return { isContiguous: false, empty: true, count: 0, gaps: [], missingIds: [] };
+      if (selectedLabs.length === 1) return { isContiguous: false, single: true, count: 1, lab: selectedLabs[0], gaps: [], missingIds: [] };
+
+      const gaps = [];
+      for (let i = 1; i < selectedLabs.length; i++) {
+        const prev = selectedLabs[i - 1];
+        const curr = selectedLabs[i];
+        const prevEnd = ipStrToNum(prev.broadcast_ip_str);
+        const currStart = ipStrToNum(curr.network_ip_str);
+        if (currStart !== prevEnd + 1) {
+          const missing = allocated.filter(l => {
+            const net = ipStrToNum(l.network_ip_str);
+            return net > prevEnd && net < currStart;
+          });
+          gaps.push({ prev, curr, missing });
+        }
+      }
+
+      const allMissingIds = [];
+      gaps.forEach(g => {
+        g.missing.forEach(m => {
+          if (!allMissingIds.includes(m.id)) allMissingIds.push(m.id);
+        });
+      });
+
+      return {
+        isContiguous: gaps.length === 0,
+        gaps,
+        missingIds: allMissingIds,
+        count: selectedLabs.length,
+        startIp: selectedLabs[0].network_ip_str,
+        endIp: selectedLabs[selectedLabs.length - 1].broadcast_ip_str,
+        labs: selectedLabs
+      };
+    }
+
+    function renderSupernetPresets() {
+      const container = document.getElementById('supernet-presets-container');
+      if (!container || !appState || !appState.labs) return;
+
+      const allocated = appState.labs
+        .filter(l => l.is_allocated !== false && l.network_ip_str && !String(l.subnet_str).includes('Exhausted'))
+        .sort((a, b) => ipStrToNum(a.network_ip_str) - ipStrToNum(b.network_ip_str));
+
+      if (allocated.length < 2) {
+        container.innerHTML = `
+          <button onclick="selectAllSupernetLabs(true)" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg transition cursor-pointer">Select All</button>
+          <button onclick="selectAllSupernetLabs(false)" class="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 text-xs font-bold rounded-lg transition cursor-pointer">Clear</button>
+        `;
+        return;
+      }
+
+      let html = '';
+
+      // Generate buttons for all contiguous adjacent pairs
+      for (let i = 0; i < allocated.length - 1; i++) {
+        const a = allocated[i];
+        const b = allocated[i + 1];
+        if (ipStrToNum(b.network_ip_str) === ipStrToNum(a.broadcast_ip_str) + 1) {
+          html += `
+            <button onclick="selectContiguousPair(${a.id}, ${b.id})" class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-lg transition cursor-pointer flex items-center space-x-1">
+              <span>🔗</span>
+              <span>Labs ${a.id} &amp; ${b.id}</span>
+            </button>
+          `;
+        }
+      }
+
+      // Check if all are contiguous
+      let allContig = true;
+      for (let i = 0; i < allocated.length - 1; i++) {
+        if (ipStrToNum(allocated[i + 1].network_ip_str) !== ipStrToNum(allocated[i].broadcast_ip_str) + 1) {
+          allContig = false;
+          break;
+        }
+      }
+
+      if (allContig) {
+        html += `
+          <button onclick="selectAllSupernetLabs(true)" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-extrabold rounded-lg transition cursor-pointer flex items-center space-x-1">
+            <span>⚡</span>
+            <span>All ${allocated.length} Labs (Contiguous)</span>
+          </button>
+        `;
+      } else {
+        html += `
+          <button onclick="selectAllSupernetLabs(true)" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg transition cursor-pointer">Select All</button>
+        `;
+      }
+
+      html += `
+        <button onclick="selectAllSupernetLabs(false)" class="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 text-xs font-bold rounded-lg transition cursor-pointer">Clear</button>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    function selectContiguousPair(idA, idB) {
+      selectSupernetIds([idA, idB]);
+    }
+
+    function selectSupernetIds(ids) {
+      if (!appState || !appState.labs) return;
+      appState.labs.forEach(lab => {
+        const chk = document.getElementById(`chk-supernet-lab-${lab.id}`);
+        const card = document.getElementById(`card-supernet-lab-${lab.id}`);
+        const isAllocated = (lab.is_allocated !== false && !String(lab.subnet_str).includes('0.0.0.0') && !String(lab.subnet_str).includes('Exhausted'));
+        if (chk && card && isAllocated) {
+          const shouldCheck = ids.includes(lab.id);
+          chk.checked = shouldCheck;
+          if (shouldCheck) {
+            card.classList.add('border-blue-500', 'bg-blue-50/70', 'ring-2', 'ring-blue-500/20', 'shadow-xs');
+            card.classList.remove('border-slate-200', 'bg-slate-50/60');
+          } else {
+            card.classList.remove('border-blue-500', 'bg-blue-50/70', 'ring-2', 'ring-blue-500/20', 'shadow-xs');
+            card.classList.add('border-slate-200', 'bg-slate-50/60');
+          }
+        }
+      });
+      updateSupernetContiguityStatus();
+    }
+
+    function autoFillSupernetGaps() {
+      const checked = document.querySelectorAll('#supernet-labs-grid input[type="checkbox"]:checked');
+      const selectedIds = Array.from(checked).map(c => parseInt(c.value));
+      const status = checkLabsContiguity(selectedIds);
+      if (status.missingIds && status.missingIds.length > 0) {
+        const combined = Array.from(new Set([...selectedIds, ...status.missingIds]));
+        selectSupernetIds(combined);
+        showToast(`Auto-included ${status.missingIds.length} missing laboratory to make selection contiguous!`, 'success');
+      }
+    }
+
+    function updateSupernetContiguityStatus() {
+      const checked = document.querySelectorAll('#supernet-labs-grid input[type="checkbox"]:checked');
+      const selectedIds = Array.from(checked).map(c => parseInt(c.value));
+      const badge = document.getElementById('supernet-selected-count-badge');
+      const banner = document.getElementById('supernet-contiguity-banner');
+      const btn = document.getElementById('btn-merge-supernet');
+      const btnText = document.getElementById('btn-merge-supernet-text');
+
+      if (badge) {
+        badge.textContent = `${checked.length} Laboratories Selected`;
+      }
+
+      const status = checkLabsContiguity(selectedIds);
+
+      if (!banner) return;
+
+      if (status.count === 0) {
+        banner.className = 'p-3.5 rounded-xl border border-blue-200 bg-blue-50/70 transition-all';
+        banner.innerHTML = `
+          <div class="flex items-center space-x-2 text-blue-800 text-xs font-semibold">
+            <span>ℹ️</span>
+            <span>Select any 2 or more contiguous laboratories below to aggregate them into a CIDR Supernet.</span>
+          </div>
+        `;
+        if (badge) badge.className = 'px-2.5 py-1 rounded-full text-xs font-extrabold bg-slate-100 text-slate-600';
+        if (btn) btn.className = 'w-full sm:w-auto px-7 py-3 bg-slate-300 text-slate-500 rounded-xl text-xs font-bold transition cursor-not-allowed flex items-center justify-center space-x-2';
+        if (btnText) btnText.textContent = 'Select Laboratories to Merge';
+      } else if (status.count === 1) {
+        banner.className = 'p-3.5 rounded-xl border border-amber-200 bg-amber-50/80 transition-all';
+        banner.innerHTML = `
+          <div class="flex items-center space-x-2 text-amber-800 text-xs font-semibold">
+            <span>ℹ️</span>
+            <span>1 laboratory selected (<strong>#${status.lab.id} ${status.lab.name}</strong>). Supernetting requires at least 2 contiguous laboratories. Click another adjacent lab card.</span>
+          </div>
+        `;
+        if (badge) badge.className = 'px-2.5 py-1 rounded-full text-xs font-extrabold bg-amber-100 text-amber-800';
+        if (btn) btn.className = 'w-full sm:w-auto px-7 py-3 bg-slate-300 text-slate-500 rounded-xl text-xs font-bold transition cursor-not-allowed flex items-center justify-center space-x-2';
+        if (btnText) btnText.textContent = 'Select at least 2 Labs';
+      } else if (status.isContiguous) {
+        banner.className = 'p-4 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-900 transition-all shadow-xs';
+        banner.innerHTML = `
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+            <div class="space-y-1">
+              <div class="flex items-center space-x-2 font-extrabold text-xs text-emerald-900">
+                <span class="text-base">✅</span>
+                <span>CONTIGUITY VERIFIED: ${status.count} Laboratories Seamlessly Contiguous</span>
+              </div>
+              <div class="text-[11px] text-emerald-800 font-medium">
+                Contiguous IP Span: <span class="font-mono font-bold bg-white/80 px-1.5 py-0.5 rounded border border-emerald-200 text-emerald-900">${status.startIp} — ${status.endIp}</span> with <strong>ZERO address gaps</strong>.
+              </div>
+            </div>
+            <div class="flex items-center space-x-2 shrink-0">
+              <span class="px-3 py-1 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white uppercase tracking-wider shadow-xs">
+                100% Contiguous
+              </span>
+            </div>
+          </div>
+        `;
+        if (badge) badge.className = 'px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800';
+        if (btn) btn.className = 'w-full sm:w-auto px-7 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold shadow-pill transition cursor-pointer flex items-center justify-center space-x-2';
+        if (btnText) btnText.textContent = `Merge ${status.count} Contiguous Labs into Supernet`;
+      } else {
+        // Non-contiguous gap detected
+        const gap = status.gaps[0];
+        const missingNames = gap.missing.map(m => `#${m.id} ${m.name} (${m.subnet_str})`).join(', ');
+        banner.className = 'p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 transition-all shadow-xs';
+        banner.innerHTML = `
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+            <div class="space-y-1">
+              <div class="flex items-center space-x-2 font-extrabold text-xs text-amber-900">
+                <span class="text-base">⚠️</span>
+                <span>NON-CONTIGUOUS SELECTION: Address Gap Detected</span>
+              </div>
+              <div class="text-[11px] text-amber-800 font-medium">
+                Gap between <strong>#${gap.prev.id} ${gap.prev.name}</strong> and <strong>#${gap.curr.id} ${gap.curr.name}</strong>. Missing intermediate laboratory: <span class="font-semibold text-amber-950">${missingNames}</span>.
+              </div>
+            </div>
+            <button onclick="autoFillSupernetGaps()" class="shrink-0 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer transition flex items-center space-x-1.5">
+              <span>⚡</span>
+              <span>Auto-Select Missing Labs</span>
+            </button>
+          </div>
+        `;
+        if (badge) badge.className = 'px-2.5 py-1 rounded-full text-xs font-extrabold bg-amber-100 text-amber-800';
+        if (btn) btn.className = 'w-full sm:w-auto px-7 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl text-xs font-bold shadow-pill transition cursor-pointer flex items-center justify-center space-x-2';
+        if (btnText) btnText.textContent = `Merge ${status.count} Labs (Non-Contiguous Aggregation)`;
+      }
+    }
+
+    function intToIpStr(n) {
+      return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+    }
+
+    function syncSupernetCardState(labId) {
+      const chk = document.getElementById(`chk-supernet-lab-${labId}`);
+      const card = document.getElementById(`card-supernet-lab-${labId}`);
+      if (!chk || !card) return;
+      if (chk.checked) {
+        card.classList.add('border-blue-500', 'bg-blue-50/70', 'ring-2', 'ring-blue-500/20', 'shadow-xs');
+        card.classList.remove('border-slate-200', 'bg-slate-50/60');
+      } else {
+        card.classList.remove('border-blue-500', 'bg-blue-50/70', 'ring-2', 'ring-blue-500/20', 'shadow-xs');
+        card.classList.add('border-slate-200', 'bg-slate-50/60');
+      }
+      updateSupernetContiguityStatus();
+    }
+
+    function toggleSupernetLabCard(labId) {
+      const chk = document.getElementById(`chk-supernet-lab-${labId}`);
+      if (!chk) return;
+      chk.checked = !chk.checked;
+      syncSupernetCardState(labId);
+    }
+
+    function populateSupernetLabsGrid() {
+      const grid = document.getElementById('supernet-labs-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      if (!appState || !appState.labs || appState.labs.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full p-6 text-center text-slate-400 font-semibold bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            No active campus laboratories configured. Click "Configure Campus Labs" in the top bar to set up labs.
+          </div>
+        `;
+        updateSupernetContiguityStatus();
+        return;
+      }
+
+      const allocated = (appState.labs || [])
+        .filter(l => l.is_allocated !== false && !String(l.subnet_str).includes('0.0.0.0') && !String(l.subnet_str).includes('Exhausted'))
+        .map(l => {
+          if (!l.network_ip_str && l.subnet_str) l.network_ip_str = l.subnet_str.split('/')[0];
+          return l;
+        })
+        .sort((a, b) => ipStrToNum(a.network_ip_str) - ipStrToNum(b.network_ip_str));
+
+      allocated.forEach((lab, idx) => {
+        const prevLab = idx > 0 ? allocated[idx - 1] : null;
+        const nextLab = idx < allocated.length - 1 ? allocated[idx + 1] : null;
+
+        const isContigWithPrev = prevLab && (ipStrToNum(lab.network_ip_str) === ipStrToNum(prevLab.broadcast_ip_str) + 1);
+        const isContigWithNext = nextLab && (ipStrToNum(nextLab.network_ip_str) === ipStrToNum(lab.broadcast_ip_str) + 1);
+
+        let adjacencyText = '';
+        if (isContigWithPrev && isContigWithNext) {
+          adjacencyText = `🔗 Contiguous with #${prevLab.id} &amp; #${nextLab.id}`;
+        } else if (isContigWithPrev) {
+          adjacencyText = `🔗 Contiguous with #${prevLab.id}`;
+        } else if (isContigWithNext) {
+          adjacencyText = `🔗 Contiguous with #${nextLab.id}`;
+        } else {
+          adjacencyText = `Isolated Subnet`;
+        }
+
+        const card = document.createElement('div');
+        card.id = `card-supernet-lab-${lab.id}`;
+        card.className = `supernet-lab-card p-4 rounded-xl border transition cursor-pointer flex items-start space-x-3 border-slate-200 bg-slate-50/60 hover:bg-blue-50/50 hover:border-blue-300`;
+        card.onclick = (e) => {
+          if (e.target && e.target.type === 'checkbox') return;
+          toggleSupernetLabCard(lab.id);
+        };
+
+        card.innerHTML = `
+          <input type="checkbox" id="chk-supernet-lab-${lab.id}" value="${lab.id}" onchange="syncSupernetCardState(${lab.id})" class="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold text-slate-900 truncate">#${lab.id} ${lab.name}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">VLAN ${lab.vlan_id}</span>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-0.5 truncate">${lab.department}</div>
+            <div class="mt-2 flex items-center justify-between text-xs">
+              <span class="font-bold text-blue-600 bg-white px-2 py-0.5 rounded border border-slate-200/80 font-mono text-[11px]">${lab.subnet_str}</span>
+              <span class="text-slate-600 font-semibold font-mono text-[11px]">${lab.workstations} PCs</span>
+            </div>
+            <div class="mt-1.5 flex items-center justify-between text-[10px] text-slate-400 font-medium">
+              <span class="font-mono text-slate-500">${lab.network_ip_str} — ${lab.broadcast_ip_str || ''}</span>
+              <span class="text-indigo-600 font-semibold">${adjacencyText}</span>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      renderSupernetPresets();
+
+      // By default select the first 2 contiguous labs
+      if (allocated.length >= 2) {
+        selectContiguousPair(allocated[0].id, allocated[1].id);
+      } else if (allocated.length === 1) {
+        selectSupernetIds([allocated[0].id]);
+      } else {
+        updateSupernetContiguityStatus();
+      }
+    }
+
+    function selectAllSupernetLabs(select) {
+      if (!appState || !appState.labs) return;
+      const ids = select ? appState.labs.filter(l => l.is_allocated !== false && l.network_ip_str).map(l => l.id) : [];
+      selectSupernetIds(ids);
+    }
+
+    function selectFirstNSupernetLabs(n) {
+      if (!appState || !appState.labs) return;
+      const allocated = appState.labs
+        .filter(l => l.is_allocated !== false && l.network_ip_str && !String(l.subnet_str).includes('Exhausted'))
+        .sort((a, b) => ipStrToNum(a.network_ip_str) - ipStrToNum(b.network_ip_str));
+      const ids = allocated.slice(0, n).map(l => l.id);
+      selectSupernetIds(ids);
+    }
+
+    function updateSupernetSelectedCount() {
+      updateSupernetContiguityStatus();
+    }
+
+    async function mergeSelectedLabs() {
+      const checked = document.querySelectorAll('#supernet-labs-grid input[type="checkbox"]:checked');
+      if (checked.length === 0) {
+        showToast('Please select at least two laboratories to merge.', 'warning');
+        return;
+      }
+      if (checked.length === 1) {
+        showToast('Supernetting requires at least 2 contiguous networks to combine.', 'warning');
+        return;
+      }
+
+      const selectedIds = Array.from(checked).map(c => parseInt(c.value));
+      try {
+        const res = await fetch('/api/labs/merge', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ lab_ids: selectedIds })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          showToast(data.error || 'Failed to merge laboratories', 'error');
+          return;
+        }
+
+        renderSupernetResults(data.result);
+        const container = document.getElementById('supernet-result-container');
+        if (container) {
+          container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        showToast(`Successfully merged ${selectedIds.length} laboratories into supernet ${data.result.supernet_str}!`, 'success');
+      } catch (e) {
+        showToast('Error merging laboratories', 'error');
+      }
+    }
+
+    async function commitSupernetMerge() {
+      const nameInput = document.getElementById('input-merged-lab-name');
+      const deptInput = document.getElementById('input-merged-lab-dept');
+      const newName = nameInput ? nameInput.value.trim() : '';
+      const newDept = deptInput ? deptInput.value.trim() : '';
+
+      if (!newName) {
+        showToast('Please enter a name for the merged laboratory', 'warning');
+        return;
+      }
+
+      if (!window.currentSupernetResult || !window.currentSupernetResult.merged_labs) {
+        showToast('No active supernet calculation to commit.', 'error');
+        return;
+      }
+
+      const labIds = window.currentSupernetResult.merged_labs.map(l => l.id);
+
+      try {
+        const res = await fetch('/api/labs/merge-commit', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            lab_ids: labIds,
+            new_name: newName,
+            new_department: newDept
+          })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          showToast(data.error || 'Failed to apply supernet', 'error');
+          return;
+        }
+
+        showToast(`🎉 Supernet "${data.result.merged_name}" successfully applied to Campus Subnet Table!`, 'success');
+        await fetchState();
+        switchTab('vlsm');
+      } catch (err) {
+        showToast('Error applying supernet to campus', 'error');
+      }
+    }
+
+    async function splitSupernetBack() {
+      try {
+        const res = await fetch('/api/labs/split', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'}
+        });
+        const data = await res.json();
+        if (!data.success) {
+          showToast(data.error || 'Failed to split supernet', 'error');
+          return;
+        }
+
+        showToast(`↩️ Supernet split successfully! Restored ${data.result.restored_count} original laboratories.`, 'success');
+        await fetchState();
+        populateSupernetLabsGrid();
+      } catch (err) {
+        showToast('Error splitting supernet', 'error');
+      }
+    }
+
+    function toggleManualSupernetSection() {
+      const panel = document.getElementById('manual-supernet-panel');
+      const icon = document.getElementById('manual-supernet-toggle-icon');
+      if (!panel) return;
+      if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        if (icon) icon.textContent = '▲ Collapse';
+      } else {
+        panel.classList.add('hidden');
+        if (icon) icon.textContent = '▼ Expand';
+      }
+    }
+
+    function loadSupernetPreset(presetId) {
+      const panel = document.getElementById('manual-supernet-panel');
+      const icon = document.getElementById('manual-supernet-toggle-icon');
+      if (panel && panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        if (icon) icon.textContent = '▲ Collapse';
+      }
+      const inputEl = document.getElementById('supernet-input');
+      if (!inputEl) return;
+      if (presetId === 'preset4c') {
+        inputEl.value = '192.168.0.0/24\n192.168.1.0/24\n192.168.2.0/24\n192.168.3.0/24';
+      } else if (presetId === 'preset8c') {
+        inputEl.value = '198.51.100.0/24\n198.51.101.0/24\n198.51.102.0/24\n198.51.103.0/24\n198.51.104.0/24\n198.51.105.0/24\n198.51.106.0/24\n198.51.107.0/24';
+      } else if (presetId === 'preset2c') {
+        inputEl.value = '172.16.10.0/25\n172.16.10.128/25';
+      }
+      runManualSupernetCalculation();
+    }
+
+    function clearSupernetInput() {
+      const inputEl = document.getElementById('supernet-input');
+      if (inputEl) inputEl.value = '';
+      const container = document.getElementById('supernet-result-container');
+      if (container) container.innerHTML = '';
+    }
+
+    function importCampusSubnetsToSupernet() {
+      selectAllSupernetLabs(true);
+      mergeSelectedLabs();
+    }
+
+    async function runManualSupernetCalculation() {
+      const inputEl = document.getElementById('supernet-input');
+      if (!inputEl) return;
+      const text = inputEl.value.trim();
+      if (!text) {
+        showToast('Please enter at least two subnets to merge', 'warning');
+        return;
+      }
+      const lines = text.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean);
+      try {
+        const res = await fetch('/api/supernet', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ subnets: lines })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          showToast(data.error || 'Supernet calculation failed', 'error');
+          return;
+        }
+        renderSupernetResults(data.result);
+        showToast(`Calculated supernet ${data.result.supernet_str}!`, 'success');
+      } catch (e) {
+        showToast('Error calculating custom supernet', 'error');
+      }
+    }
+
+    function renderSupernetResults(r) {
+      const container = document.getElementById('supernet-result-container');
+      if (!container) return;
+
+      window.currentSupernetResult = r;
+      
+      let badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      if ((r.verdict || '').includes('NON_CONTIGUOUS')) badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+
+      const prefix = r.supernet_str || r.supernet_prefix || '--';
+      const mask = r.supernet_mask_str || r.supernet_mask || '--';
+      const usable = (r.usable_supernet_hosts || r.supernet_usable_hosts || 0).toLocaleString();
+      const totalIps = (r.total_supernet_ips || 0).toLocaleString();
+      const count = r.input_count || r.total_input_subnets || 1;
+      const cStatic = r.cisco_static || r.cisco_static_route || '';
+      const cOspf = r.cisco_ospf || r.cisco_ospf_summary || '';
+      const cBgp = r.cisco_bgp || r.cisco_bgp_summary || '';
+      const cEigrp = r.cisco_eigrp || r.cisco_eigrp_summary || '';
+
+      // Commit card prompting for new merged laboratory name
+      let commitCardHtml = '';
+      if (r.merged_labs && r.merged_labs.length > 0) {
+        const defaultName = `Consolidated Super-Lab (${r.merged_labs.map(l => l.name.replace(/Lab|Laboratory/gi, '').trim()).filter(Boolean).join(' & ') || 'Merged Labs'})`;
+        const defaultDept = r.merged_labs[0].department || 'Central Engineering Complex';
+
+        commitCardHtml = `
+          <!-- PROMPT FOR NEW MERGED LAB NAME & COMMIT TO SUBNET TABLE -->
+          <div class="p-6 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl text-white shadow-xl space-y-4 border border-blue-700/50">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+              <div class="flex items-center space-x-2.5">
+                <span class="text-2xl">🏷️</span>
+                <div>
+                  <h4 class="text-sm font-extrabold tracking-tight text-white">Name Your Consolidated Supernet Laboratory</h4>
+                  <p class="text-[11px] text-blue-200">Enter a new custom name to apply this supernet directly into your Campus Subnet Table.</p>
+                </div>
+              </div>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 font-mono self-start sm:self-auto">
+                Prefix: ${prefix}
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div>
+                <label class="block text-[11px] font-bold text-blue-200 mb-1">New Laboratory Name:</label>
+                <input type="text" id="input-merged-lab-name" value="${defaultName}" class="w-full px-3.5 py-2.5 bg-white/10 border border-white/20 rounded-xl text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-white/40">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-blue-200 mb-1">Department / Location:</label>
+                <input type="text" id="input-merged-lab-dept" value="${defaultDept}" class="w-full px-3.5 py-2.5 bg-white/10 border border-white/20 rounded-xl text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-white/40">
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-white/10">
+              <span class="text-[11px] text-blue-200 flex items-center space-x-1.5">
+                <span>ℹ️</span>
+                <span>Updates the subnet table and consolidates ${r.merged_labs.length} laboratories. You can split back to separate labs at any time!</span>
+              </span>
+              <button onclick="commitSupernetMerge()" class="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-extrabold text-xs rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center space-x-2">
+                <span>💾</span>
+                <span>Apply to Subnet Table with this Name</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }
+
+      // Merged Labs header if available
+      let mergedLabsHtml = '';
+      if (r.merged_labs && r.merged_labs.length > 0) {
+        const labBadges = r.merged_labs.map(l => `
+          <span class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-slate-800 border border-blue-200 shadow-xs">
+            <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+            <span>#${l.id} ${l.name}</span>
+            <span class="text-blue-600 font-mono text-[11px] font-bold">(${l.subnet_str})</span>
+          </span>
+        `).join('<span class="text-blue-400 font-extrabold text-sm">+</span>');
+
+        mergedLabsHtml = `
+          <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-blue-900 flex items-center space-x-2">
+                <span>🔀</span>
+                <span>Active Merged Laboratories (${r.merged_labs.length} Labs Combined)</span>
+              </span>
+              <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-blue-600 text-white">Aggregated into Supernet</span>
+            </div>
+            <div class="flex items-center flex-wrap gap-2 pt-1">
+              ${labBadges}
+            </div>
+          </div>
+        `;
+      }
+
+      // Rules checklist HTML
+      const checklist = r.rules_checklist || [];
+      let checklistHtml = '';
+      checklist.forEach(item => {
+        const isPass = item.passed;
+        const icon = isPass ? '✅' : '⚠️';
+        const statusBadge = isPass ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
+        checklistHtml += `
+          <div class="p-3.5 rounded-xl border ${isPass ? 'border-emerald-200 bg-emerald-50/40' : 'border-amber-200 bg-amber-50/40'} space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs ${isPass ? 'text-emerald-900' : 'text-amber-900'} flex items-center space-x-1.5">
+                <span>${icon}</span>
+                <span>${item.name}</span>
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${statusBadge}">${item.status}</span>
+            </div>
+            <p class="text-[11px] text-slate-600 leading-tight">${item.description}</p>
+          </div>
+        `;
+      });
+
+      // Binary bit matrix rows
+      let binaryRowsHtml = '';
+      const binList = r.binary_analysis || [];
+      binList.forEach((item, idx) => {
+        binaryRowsHtml += `
+          <tr class="hover:bg-slate-50 font-mono text-xs border-b border-slate-100">
+            <td class="px-4 py-2.5 font-bold text-slate-700 whitespace-nowrap">#${idx + 1} ${item.network_str}</td>
+            <td class="px-4 py-2.5">
+              <span class="bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded font-bold tracking-widest">${item.common_bits}</span><span class="bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded tracking-widest font-semibold ml-0.5">${item.divergent_bits}</span>
+            </td>
+          </tr>
+        `;
+      });
+
+      container.innerHTML = `
+        ${commitCardHtml}
+        ${mergedLabsHtml}
+
+        <!-- MASTER SUPERNET IDENTITY CARD -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 p-7 shadow-card space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div>
+              <span class="inline-block px-3 py-1 rounded-full text-xs font-bold border ${badgeClass}">
+                ${r.verdict_badge || 'Route Summary'}
+              </span>
+              <div class="text-3xl font-extrabold text-blue-600 font-mono mt-2">${prefix}</div>
+              <div class="text-xs text-slate-500 font-medium mt-0.5">${r.verdict_desc || ''}</div>
+            </div>
+            <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-right">
+              <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">ROUTING TABLE REDUCTION</span>
+              <span class="text-3xl font-extrabold text-[#00c076] tracking-tight block">${r.reduction_pct}%</span>
+              <span class="text-xs text-emerald-700 font-semibold">${count} separate routes consolidated into 1 supernet</span>
+            </div>
+          </div>
+
+          <!-- SUMMARY METRIC STRIP -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
+            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/60">
+              <span class="text-[10px] text-slate-400 font-bold uppercase block font-sans">Supernet Mask</span>
+              <span class="text-slate-800 font-bold text-sm mt-0.5 block">${mask}</span>
+            </div>
+            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/60">
+              <span class="text-[10px] text-slate-400 font-bold uppercase block font-sans">Total IP Span</span>
+              <span class="text-slate-900 font-bold text-sm mt-0.5 block">${totalIps} Total IPs</span>
+            </div>
+            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/60">
+              <span class="text-[10px] text-slate-400 font-bold uppercase block font-sans">Usable Host Capacity</span>
+              <span class="text-emerald-600 font-bold text-sm mt-0.5 block">${usable} Hosts</span>
+            </div>
+            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/60">
+              <span class="text-[10px] text-slate-400 font-bold uppercase block font-sans">Bits Borrowed Back</span>
+              <span class="text-indigo-600 font-bold text-sm mt-0.5 block">${r.borrowed_bits || 0} Network Bits</span>
+            </div>
+          </div>
+
+          <!-- USABLE HOST BOUNDARIES -->
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+            <div>
+              <span class="text-[10px] text-slate-400 uppercase font-sans font-bold block">First Usable Host</span>
+              <span class="text-slate-800 font-bold mt-0.5 block">${r.supernet_first_usable || '--'}</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400 uppercase font-sans font-bold block">Last Usable Host</span>
+              <span class="text-slate-800 font-bold mt-0.5 block">${r.supernet_last_usable || '--'}</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400 uppercase font-sans font-bold block">Supernet Broadcast IP</span>
+              <span class="text-purple-600 font-bold mt-0.5 block">${r.supernet_broadcast_str || '--'}</span>
+            </div>
+          </div>
+
+          <!-- THE 4 GOLDEN RULES OF SUPERNETTING -->
+          <div class="space-y-3 pt-2 border-t border-slate-100">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">The 4 Golden Rules of Supernetting (Verification Matrix)</h4>
+              <span class="text-[11px] text-slate-400">Strict RFC 1519 compliance checks</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              ${checklistHtml}
+            </div>
+          </div>
+
+          <!-- BIT-LEVEL LONGEST COMMON PREFIX (LCP) MATRIX -->
+          <div class="space-y-3 pt-2 border-t border-slate-100">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Bitwise Longest Common Prefix (LCP) Decomposition</h4>
+              <div class="flex items-center space-x-3 text-[11px]">
+                <span class="inline-flex items-center"><span class="w-2.5 h-2.5 bg-blue-400 rounded-sm mr-1"></span> Common Prefix (/${r.supernet_cidr})</span>
+                <span class="inline-flex items-center"><span class="w-2.5 h-2.5 bg-purple-400 rounded-sm mr-1"></span> Divergent Host Bits</span>
+              </div>
+            </div>
+            <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <table class="w-full text-left">
+                <thead class="bg-slate-50 text-[10px] text-slate-400 font-bold uppercase border-b border-slate-200">
+                  <tr>
+                    <th class="px-4 py-2 w-52">Member Subnet</th>
+                    <th class="px-4 py-2">32-Bit Binary Alignment</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${binaryRowsHtml}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- SUBNETTING VS. SUPERNETTING COMPARISON TABLE -->
+          <div class="space-y-3 pt-2 border-t border-slate-100">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Computer Networks Reference: Subnetting vs. Supernetting</h4>
+            <div class="border border-slate-200 rounded-xl overflow-hidden text-xs">
+              <table class="w-full text-left">
+                <thead class="bg-slate-50 text-[10px] text-slate-500 font-bold uppercase border-b border-slate-200">
+                  <tr>
+                    <th class="px-4 py-2.5 w-1/4">Feature / Concept</th>
+                    <th class="px-4 py-2.5 w-3/8 text-blue-700">Subnetting (Subnet Creation)</th>
+                    <th class="px-4 py-2.5 w-3/8 text-emerald-700">Supernetting (CIDR Aggregation)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <tr>
+                    <td class="px-4 py-2.5 font-bold text-slate-700">Core Network Operation</td>
+                    <td class="px-4 py-2.5 text-slate-600">Splits <strong>one large network</strong> into multiple smaller subnets</td>
+                    <td class="px-4 py-2.5 text-slate-800 font-semibold bg-emerald-50/20">Combines <strong>multiple contiguous smaller networks</strong> into one supernet</td>
+                  </tr>
+                  <tr>
+                    <td class="px-4 py-2.5 font-bold text-slate-700">Mask Prefix Length</td>
+                    <td class="px-4 py-2.5 text-slate-600">Prefix length <strong>increases</strong> (e.g., /24 → /26)</td>
+                    <td class="px-4 py-2.5 text-slate-800 font-semibold bg-emerald-50/20">Prefix length <strong>decreases</strong> (e.g., /24 → /22)</td>
+                  </tr>
+                  <tr>
+                    <td class="px-4 py-2.5 font-bold text-slate-700">Bit Borrowing Direction</td>
+                    <td class="px-4 py-2.5 text-slate-600">Borrows <strong>Host bits</strong> into Network bits</td>
+                    <td class="px-4 py-2.5 text-slate-800 font-semibold bg-emerald-50/20">Borrows <strong>Network bits</strong> back into Host bits</td>
+                  </tr>
+                  <tr>
+                    <td class="px-4 py-2.5 font-bold text-slate-700">Primary Objective</td>
+                    <td class="px-4 py-2.5 text-slate-600">Conserve IP addresses and isolate broadcast domains internally</td>
+                    <td class="px-4 py-2.5 text-slate-800 font-semibold bg-emerald-50/20">Shrink Routing Tables, reduce router memory, and speed up packet forwarding</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- MULTI-PROTOCOL CISCO IOS CLI SUMMARY COMMANDS -->
+          <div class="space-y-3 pt-2 border-t border-slate-100">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Production Cisco IOS Routing Protocols CLI Generator</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="bg-slate-900 rounded-xl p-4 text-slate-200 text-xs font-mono space-y-2 border border-slate-800 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 text-[11px] border-b border-slate-800 pb-1">
+                  <span>Static Discard Route (Anti-Loop)</span>
+                  <button onclick="navigator.clipboard.writeText('${cStatic}'); showToast('Static route copied!', 'success');" class="text-blue-400 hover:text-white cursor-pointer transition">Copy</button>
+                </div>
+                <div class="text-emerald-400">${cStatic}</div>
+              </div>
+
+              <div class="bg-slate-900 rounded-xl p-4 text-slate-200 text-xs font-mono space-y-2 border border-slate-800 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 text-[11px] border-b border-slate-800 pb-1">
+                  <span>OSPF Area Border Router (ABR)</span>
+                  <button onclick="navigator.clipboard.writeText('${cOspf.replace(/\\n/g, ' ')}'); showToast('OSPF summary copied!', 'success');" class="text-blue-400 hover:text-white cursor-pointer transition">Copy</button>
+                </div>
+                <div class="text-emerald-400 whitespace-pre">${cOspf}</div>
+              </div>
+
+              <div class="bg-slate-900 rounded-xl p-4 text-slate-200 text-xs font-mono space-y-2 border border-slate-800 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 text-[11px] border-b border-slate-800 pb-1">
+                  <span>BGP Border Gateway Aggregation</span>
+                  <button onclick="navigator.clipboard.writeText('${cBgp.replace(/\\n/g, ' ')}'); showToast('BGP summary copied!', 'success');" class="text-blue-400 hover:text-white cursor-pointer transition">Copy</button>
+                </div>
+                <div class="text-emerald-400 whitespace-pre">${cBgp}</div>
+              </div>
+
+              <div class="bg-slate-900 rounded-xl p-4 text-slate-200 text-xs font-mono space-y-2 border border-slate-800 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 text-[11px] border-b border-slate-800 pb-1">
+                  <span>EIGRP Interface Route Summary</span>
+                  <button onclick="navigator.clipboard.writeText('${cEigrp.replace(/\\n/g, ' ')}'); showToast('EIGRP summary copied!', 'success');" class="text-blue-400 hover:text-white cursor-pointer transition">Copy</button>
+                </div>
+                <div class="text-emerald-400 whitespace-pre">${cEigrp}</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      `;
+    }
+
+
+    // =========================================================================
+    // TAB 5: 32-BIT BINARY VISUALIZER
+    // =========================================================================
+    function setBinPreset(val) {
+      document.getElementById('bin-input').value = val;
+      calculateBinary();
+    }
+
+    async function calculateBinary() {
+      const inputEl = document.getElementById('bin-input');
+      if (!inputEl) return;
+      const raw = inputEl.value.trim();
+      if (!raw) return;
+
+      try {
+        const res = await fetch('/api/binary', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ input: raw })
+        });
+        const data = await res.json();
+        if (!data.success) return;
+
+        const info = data.info;
+        const grid = document.getElementById('binary-grid');
+        grid.innerHTML = '';
+
+        const binStr = (info.binary_ip || info.ip_binary || '').replace(/\./g, '');
+        const cidr = info.cidr;
+
+        for (let o = 0; o < 4; o++) {
+          const octetDiv = document.createElement('div');
+          octetDiv.className = 'flex items-center space-x-1 p-2 bg-white rounded-xl border border-slate-200/80 shadow-sm';
+          for (let b = 0; b < 8; b++) {
+            const bitIdx = o * 8 + b;
+            const bitVal = binStr[bitIdx] || '0';
+            const span = document.createElement('span');
+            span.className = 'binary-bit w-6 h-8 flex items-center justify-center font-bold text-xs rounded-lg select-none cursor-default';
+            if (bitIdx < cidr) {
+              if (bitIdx < (info.network_bits || 24)) {
+                span.className += ' bg-blue-600 text-white';
+              } else {
+                span.className += ' bg-indigo-500 text-white';
+              }
+            } else {
+              span.className += ' bg-slate-100 text-slate-700';
+            }
+            span.textContent = bitVal;
+            octetDiv.appendChild(span);
+          }
+          grid.appendChild(octetDiv);
+          if (o < 3) {
+            const dot = document.createElement('span');
+            dot.className = 'text-slate-400 font-bold text-lg select-none';
+            dot.textContent = '•';
+            grid.appendChild(dot);
+          }
+        }
+
+        document.getElementById('binary-prefix-desc').textContent = 
+          `Class ${info.ip_class} • /${info.cidr} prefix: ${info.network_bits} Network Bits • ${info.borrowed_bits} Borrowed Subnet Bits • ${info.host_bits} Host Bits`;
+
+        document.getElementById('binary-math-breakdown').innerHTML = `
+<div class="text-slate-400">// Step 1: Bitwise ANDing for Network ID (IP &amp; MASK)</div>
+<div>IP:      ${(info.ip_str || '').padEnd(16)} [${info.binary_ip || ''}]</div>
+<div>MASK:    ${(info.mask_str || '').padEnd(16)} [${info.binary_mask || ''}]</div>
+<div class="text-blue-400 font-bold">NET ID:  ${(info.network_str || '').padEnd(16)} [${info.binary_network || ''}]</div>
+<br>
+<div class="text-slate-400">// Step 2: Wildcard Bitwise Inversion (~MASK) &amp; Broadcast (NET | WILDCARD)</div>
+<div>WILDCARD: ${(info.wildcard_str || '').padEnd(15)} [${intToBinDot(info.wildcard_int || 0)}]</div>
+<div class="text-purple-400 font-bold">BCAST ID: ${(info.broadcast_str || '').padEnd(15)} [${info.binary_broadcast || ''}]</div>
+        `;
+
+        document.getElementById('bin-first-host').textContent = info.first_usable_str || info.first_usable_ip || '0.0.0.0';
+        document.getElementById('bin-last-host').textContent = info.last_usable_str || info.last_usable_ip || '0.0.0.0';
+        document.getElementById('bin-usable-count').textContent = `${(info.usable_hosts || 0).toLocaleString()} Hosts`;
+
+      } catch (err) {
+        console.error('Binary calculation error:', err);
+      }
+    }
+
+    function intToBinDot(val) {
+      const o1 = (val >>> 24) & 255;
+      const o2 = (val >>> 16) & 255;
+      const o3 = (val >>> 8) & 255;
+      const o4 = val & 255;
+      return [o1, o2, o3, o4].map(b => b.toString(2).padStart(8, '0')).join('.');
+    }
+
+
+    // =========================================================================
+    // TAB 6: REACHABILITY DIAGNOSTICS
+    // =========================================================================
+    function setReachScenario(a, b) {
+      document.getElementById('reach-ip-a').value = a;
+      document.getElementById('reach-ip-b').value = b;
+      runReachabilityCheck();
+    }
+
+    async function runReachabilityCheck() {
+      const a = document.getElementById('reach-ip-a').value.trim();
+      const b = document.getElementById('reach-ip-b').value.trim();
+      try {
+        const res = await fetch('/api/reachability', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ ip_a: a, ip_b: b })
+        });
+        const data = await res.json();
+        if (!data.success) return;
+
+        const r = data.result;
+        const card = document.getElementById('reach-result-card');
+        
+        let badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        if (r.status === 'DIFFERENT_SUBNET_L3' || r.path_type === 'ROUTED') badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
+        else if (r.status === 'ASYMMETRIC_MASK_ERROR' || r.path_type === 'ASYMMETRIC') badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+
+        const headline = r.headline || r.verdict || 'Reachability Diagnosis';
+        const badge = r.badge || r.summary_badge || 'Active';
+        const diag = r.diagnosis || r.detailed_explanation || '';
+        const netA = r.net_a || (r.host_a && r.host_a.network) || a;
+        const netB = r.net_b || (r.host_b && r.host_b.network) || b;
+        const nextHop = r.recommendation || r.next_hop_recommendation || 'Default Gateway';
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center space-x-2">
+              <span class="inline-block px-3 py-1 rounded-full text-xs font-bold border ${badgeColor}">
+                ${badge}
+              </span>
+            </div>
+            <span class="text-xs font-bold mono text-slate-500">${headline}</span>
+          </div>
+          <p class="text-xs text-slate-600 leading-relaxed font-sans">${diag}</p>
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200/70 font-mono text-xs space-y-1.5">
+            <div class="flex justify-between"><span class="text-slate-500">Host A Subnet:</span> <span class="font-bold text-slate-800">${netA}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Host B Subnet:</span> <span class="font-bold text-slate-800">${netB}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Routing Next-Hop:</span> <span class="font-bold text-blue-600">${nextHop}</span></div>
+          </div>
+        `;
+      } catch (err) {
+        console.error('Reachability check error:', err);
+      }
+    }
+
+
+    // =========================================================================
+    // TAB 7: SINGLE SUBNET CALCULATOR
+    // =========================================================================
+    async function runSingleCalc() {
+      const inputEl = document.getElementById('calc-input');
+      if (!inputEl) return;
+      const raw = inputEl.value.trim();
+      try {
+        const res = await fetch('/api/calc', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ input: raw })
+        });
+        const data = await res.json();
+        if (!data.success) return;
+
+        const info = data.info;
+        const grid = document.getElementById('calc-results-grid');
+        const ipStr = info.ip_str || info.ip_address || raw;
+        const maskStr = info.mask_str || info.subnet_mask || '--';
+        const wildStr = info.wildcard_str || info.wildcard_mask || '--';
+        const netStr = info.network_str || info.network_ip || '--';
+        const bcastStr = info.broadcast_str || info.broadcast_ip || '--';
+        const fUsable = info.first_usable_str || info.first_usable_ip || '--';
+        const lUsable = info.last_usable_str || info.last_usable_ip || '--';
+        const usableCount = (info.usable_hosts || 0).toLocaleString();
+        const totalCount = (info.total_ips || info.total_hosts || 0).toLocaleString();
+        const ipClass = info.ip_class || 'Class C';
+        const scopeStr = info.scope || info.ip_scope || 'Private';
+
+        grid.innerHTML = `
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-card space-y-3 font-mono text-xs">
+            <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider font-sans border-b border-slate-100 pb-2">Network Addressing Identity</h4>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">IP Address:</span> <span class="font-bold text-blue-600">${ipStr}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">Subnet Mask:</span> <span class="font-bold text-slate-800">${maskStr}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">Wildcard Mask:</span> <span class="text-slate-700">${wildStr}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">Network ID:</span> <span class="font-bold text-slate-900">${netStr}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">Broadcast ID:</span> <span class="font-bold text-purple-600">${bcastStr}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">CIDR Notation:</span> <span class="font-bold text-blue-600">/${info.cidr}</span></div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-card space-y-3 font-mono text-xs">
+            <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider font-sans border-b border-slate-100 pb-2">Capacity &amp; RFC 1918 Scope</h4>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">First Usable:</span> <span class="font-bold text-emerald-600">${fUsable}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">Last Usable:</span> <span class="font-bold text-emerald-600">${lUsable}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">Usable Hosts:</span> <span class="font-bold text-[#00c076]">${usableCount} Hosts</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">Total Block Size:</span> <span class="text-slate-800">${totalCount} IPs</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">IPv4 Class:</span> <span class="font-bold text-slate-800">${ipClass}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-sans">Address Scope:</span> <span class="px-2 py-0.5 rounded text-[10px] font-bold ${scopeStr.includes('Private') ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}">${scopeStr}</span></div>
+          </div>
+        `;
+      } catch (err) {
+        console.error('Calculation error:', err);
+      }
+    }
+
+
+    // =========================================================================
+    // INTERACTIVE NETWORK TOPOLOGY (VIS.JS CANVAS & FALLBACK SVG)
+    // =========================================================================
+    let topoNetwork = null;
+    let topoRawData = null;
+    let topoNodesDataSet = null;
+    let topoEdgesDataSet = null;
+    let isHierarchicalLayout = true;
+    let showTier4Devices = true;
+
+    async function loadTopologyNetwork() {
+      const loadingEl = document.getElementById('topology-loading');
+      if (loadingEl) loadingEl.style.display = 'flex';
+
+      try {
+        const res = await fetch('/api/topology');
+        const data = await res.json();
+        if (!data.success || !data.graph) {
+          console.error('Failed to load topology:', data.error);
+          return;
+        }
+
+        topoRawData = data.graph;
+        const meta = topoRawData.metadata || {};
+
+        const nodesMetric = document.getElementById('topo-metric-nodes');
+        if (nodesMetric) nodesMetric.innerText = meta.total_nodes || '--';
+
+        const swMetric = document.getElementById('topo-metric-switches');
+        if (swMetric) swMetric.innerText = (meta.tier_counts && meta.tier_counts.tier3_access) || meta.labs_count || '--';
+
+        const vlanMetric = document.getElementById('topo-metric-vlans');
+        if (vlanMetric) vlanMetric.innerText = `${meta.labs_count || 0} VLANs`;
+
+        renderTopologyVisNetwork();
+      } catch (err) {
+        console.error('Error fetching topology:', err);
+      } finally {
+        if (loadingEl) loadingEl.style.display = 'none';
+      }
+    }
+
+    function renderTopologyVisNetwork() {
+      if (!topoRawData) return;
+      const container = document.getElementById('topology-network-container');
+      if (!container) return;
+
+      // Fallback if Vis.js library is not available
+      if (typeof vis === 'undefined') {
+        container.innerHTML = `
+          <div class="w-full h-full flex flex-col items-center justify-center p-4">
+            <object type="image/svg+xml" data="/api/topology/svg" class="w-full h-full max-h-[640px]"></object>
+          </div>
+        `;
+        return;
+      }
+
+      const filteredNodes = topoRawData.nodes.filter(n => showTier4Devices || n.tier < 4);
+      const nodeIdsSet = new Set(filteredNodes.map(n => n.id));
+      const filteredEdges = topoRawData.edges.filter(e => nodeIdsSet.has(e.from) && nodeIdsSet.has(e.to));
+
+      topoNodesDataSet = new vis.DataSet(filteredNodes.map(n => {
+        let shape = 'box';
+        let size = 25;
+        if (n.tier === 1) { shape = 'box'; size = 35; }
+        else if (n.tier === 2) { shape = 'box'; size = 30; }
+        else if (n.tier === 3) { shape = 'box'; size = 26; }
+        else if (n.tier === 4) { shape = 'ellipse'; size = 18; }
+
+        return {
+          id: n.id,
+          label: n.label,
+          level: n.level,
+          shape: shape,
+          color: n.color,
+          font: n.font,
+          margin: 10,
+          borderWidth: n.tier <= 2 ? 2.5 : 1.5,
+          shadow: { enabled: true, color: 'rgba(15, 23, 42, 0.08)', size: 8, x: 0, y: 3 },
+          raw: n
+        };
+      }));
+
+      topoEdgesDataSet = new vis.DataSet(filteredEdges.map(e => {
+        return {
+          id: e.id,
+          from: e.from,
+          to: e.to,
+          label: e.label,
+          color: e.color,
+          width: e.width || 2,
+          dashes: e.dashes || false,
+          font: { size: 9, face: 'Consolas', align: 'horizontal', color: '#64748b', strokeWidth: 2, strokeColor: '#ffffff' },
+          smooth: { type: isHierarchicalLayout ? 'cubicBezier' : 'continuous', forceDirection: 'vertical', roundness: 0.4 },
+          raw: e
+        };
+      }));
+
+      const options = {
+        layout: {
+          hierarchical: isHierarchicalLayout ? {
+            direction: 'UD',
+            sortMethod: 'directed',
+            levelSeparation: 130,
+            nodeSpacing: showTier4Devices ? 120 : 180,
+            treeSpacing: 160,
+            blockShifting: true,
+            edgeMinimization: true,
+            parentCentralization: true
+          } : false
+        },
+        physics: {
+          enabled: !isHierarchicalLayout,
+          solver: 'forceAtlas2Based',
+          forceAtlas2Based: {
+            gravitationalConstant: -60,
+            centralGravity: 0.01,
+            springLength: 100,
+            springConstant: 0.08,
+            damping: 0.4
+          }
+        },
+        interaction: {
+          hover: true,
+          tooltipDelay: 150,
+          hideEdgesOnDrag: false,
+          navigationButtons: true,
+          keyboard: true,
+          zoomView: true
+        }
+      };
+
+      if (topoNetwork) {
+        topoNetwork.destroy();
+      }
+
+      topoNetwork = new vis.Network(container, { nodes: topoNodesDataSet, edges: topoEdgesDataSet }, options);
+
+      topoNetwork.on('click', function (params) {
+        if (params.nodes && params.nodes.length > 0) {
+          const clickedNodeId = params.nodes[0];
+          const nodeItem = topoNodesDataSet.get(clickedNodeId);
+          if (nodeItem && nodeItem.raw) {
+            displayNodeInspector(nodeItem.raw);
+          }
+        } else if (params.edges && params.edges.length > 0) {
+          const clickedEdgeId = params.edges[0];
+          const edgeItem = topoEdgesDataSet.get(clickedEdgeId);
+          if (edgeItem && edgeItem.raw) {
+            displayEdgeInspector(edgeItem.raw);
+          }
+        }
+      });
+
+      setTimeout(() => {
+        if (topoNetwork) topoNetwork.fit({ animation: { duration: 600, easingFunction: 'easeInOutQuad' } });
+      }, 300);
+    }
+
+    function fitTopologyNetwork() {
+      if (topoNetwork) {
+        topoNetwork.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+      }
+    }
+
+    function toggleTopologyLayout() {
+      isHierarchicalLayout = !isHierarchicalLayout;
+      const btnTxt = document.getElementById('btn-topo-layout-txt');
+      if (btnTxt) {
+        btnTxt.innerText = isHierarchicalLayout ? 'Hierarchical View' : 'Organic View';
+      }
+      renderTopologyVisNetwork();
+    }
+
+    function toggleEndDevices() {
+      showTier4Devices = !showTier4Devices;
+      const btnTxt = document.getElementById('btn-topo-tier4-txt');
+      if (btnTxt) {
+        btnTxt.innerText = showTier4Devices ? 'Hide Host Devices' : 'Show Host Devices';
+      }
+      renderTopologyVisNetwork();
+    }
+
+    function displayNodeInspector(node) {
+      const emptyCard = document.getElementById('inspector-empty');
+      const contentCard = document.getElementById('inspector-content');
+      if (emptyCard) emptyCard.classList.add('hidden');
+      if (contentCard) contentCard.classList.remove('hidden');
+
+      let tierBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">Tier 1 • Core Gateway</span>';
+      if (node.tier === 2) tierBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">Tier 2 • Distribution Layer-3</span>';
+      else if (node.tier === 3) tierBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">Tier 3 • Edge Access Switch</span>';
+      else if (node.tier === 4) tierBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">Tier 4 • Workstation Endpoint</span>';
+
+      let interfacesHtml = '';
+      if (node.interfaces && node.interfaces.length > 0) {
+        interfacesHtml = `
+          <div class="space-y-1.5 pt-2 border-t border-slate-100">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PHYSICAL &amp; VIRTUAL INTERFACES</div>
+            <div class="space-y-1">
+              ${node.interfaces.map(iface => `
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/60 text-xs">
+                  <div>
+                    <span class="font-bold mono text-slate-800">${iface.name}</span>
+                    <span class="text-[10px] text-slate-400 block">${iface.type}</span>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">${iface.speed}</span>
+                    <span class="text-[10px] text-slate-500 block">${iface.peer || 'Active'}</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      contentCard.innerHTML = `
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            ${tierBadge}
+            <h3 class="text-base font-extrabold text-slate-900 mt-1">${node.name}</h3>
+            <span class="text-xs text-slate-500 mono">${node.hostname}</span>
+          </div>
+          <button onclick="clearInspector()" class="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <div class="space-y-2.5 text-xs">
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/70 space-y-1.5">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">HARDWARE SPECIFICATIONS</div>
+            <div class="flex justify-between"><span class="text-slate-500">Model:</span> <span class="font-bold text-slate-800">${node.model}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Role:</span> <span class="font-semibold text-slate-700 text-right max-w-[200px] truncate">${node.role}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Department:</span> <span class="font-medium text-slate-700">${node.department || 'Campus IT'}</span></div>
+          </div>
+
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/70 space-y-1.5">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">IP ADDRESSING &amp; VLANS</div>
+            <div class="flex justify-between"><span class="text-slate-500">IP Address:</span> <span class="font-bold mono text-blue-600">${node.ip}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Subnet CIDR:</span> <span class="font-bold mono text-slate-800">${node.subnet || '--'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Subnet Mask:</span> <span class="mono text-slate-700">${node.mask || '--'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">VLAN ID:</span> <span class="font-bold text-purple-600">${node.vlan || 'Native'}</span></div>
+            ${node.gateway ? `<div class="flex justify-between"><span class="text-slate-500">Default Gateway:</span> <span class="mono text-slate-700">${node.gateway}</span></div>` : ''}
+          </div>
+
+          ${interfacesHtml}
+        </div>
+      `;
+    }
+
+    function displayEdgeInspector(edge) {
+      const emptyCard = document.getElementById('inspector-empty');
+      const contentCard = document.getElementById('inspector-content');
+      if (emptyCard) emptyCard.classList.add('hidden');
+      if (contentCard) contentCard.classList.remove('hidden');
+
+      contentCard.innerHTML = `
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700">Physical Link Inspection</span>
+            <h3 class="text-base font-extrabold text-slate-900 mt-1">${edge.label || 'Network Trunk Link'}</h3>
+            <span class="text-xs text-slate-500 mono">${edge.from} ➔ ${edge.to}</span>
+          </div>
+          <button onclick="clearInspector()" class="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/70 space-y-2">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">LINK SPECIFICATIONS</div>
+            <div class="flex justify-between"><span class="text-slate-500">Link Type:</span> <span class="font-bold uppercase text-slate-800">${edge.link_type}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Link Speed:</span> <span class="font-bold text-blue-600">${edge.speed}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Physical Media:</span> <span class="font-medium text-slate-700">${edge.media || 'Ethernet'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">802.1Q VLAN:</span> <span class="font-bold text-purple-600">${edge.vlan ? `VLAN ${edge.vlan}` : 'All VLANs (Trunk)'}</span></div>
+          </div>
+
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/70 space-y-2">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ENDPOINT INTERFACES</div>
+            <div class="flex justify-between"><span class="text-slate-500">Source Interface:</span> <span class="font-bold mono text-slate-800">${edge.src_interface || '--'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Target Interface:</span> <span class="font-bold mono text-slate-800">${edge.dst_interface || '--'}</span></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function clearInspector() {
+      const emptyCard = document.getElementById('inspector-empty');
+      const contentCard = document.getElementById('inspector-content');
+      if (emptyCard) emptyCard.classList.remove('hidden');
+      if (contentCard) contentCard.classList.add('hidden');
+    }
+
+    // Initial Load
+    fetchState();
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.obj
+*.exp
+*.lib
+*.log
+.vscode/
+.idea/
+reports/*.txt
+reports/*.png
+reports/*.svg

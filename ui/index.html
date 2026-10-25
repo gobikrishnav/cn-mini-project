@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NetLab-Pro :: Campus Network Subnet Architect & VLSM Suite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .glow-cyan { box-shadow: 0 0 25px rgba(6, 182, 212, 0.25); }
+    .glow-blue { box-shadow: 0 0 25px rgba(59, 130, 246, 0.25); }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Top App Navigation -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-cyan-500/30">
+          NL
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-xl font-bold tracking-tight text-white">NetLab-Pro</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-semibold border border-cyan-500/20">v2.5 PRO</span>
+          </div>
+          <p class="text-xs text-slate-400">Campus Network Subnet Architect & VLSM Lab Planning Engine</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        <button onclick="loadCollegePreset()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+          🏫 Load College Preset (8 Labs)
+        </button>
+        <button onclick="exportCiscoConfig()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/30 transition">
+          📄 Export Cisco IOS (.cfg)
+        </button>
+        <button onclick="exportCSV()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition">
+          📊 Export CSV
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-6 py-8 flex-1 w-full space-y-8">
+
+    <!-- Metrics Summary Bar -->
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <span class="text-xs font-medium text-slate-400">Base Network Scope</span>
+        <div class="text-lg font-bold text-cyan-400 mono mt-1" id="metric-base">10.50.0.0/16</div>
+        <span class="text-[11px] text-slate-500" id="metric-capacity">65,536 Total IPs</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <span class="text-xs font-medium text-slate-400">Total Workstations</span>
+        <div class="text-lg font-bold text-emerald-400 mono mt-1" id="metric-workstations">434 PCs</div>
+        <span class="text-[11px] text-slate-500">Across 8 Planned Labs</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <span class="text-xs font-medium text-slate-400">Allocated Address Space</span>
+        <div class="text-lg font-bold text-yellow-400 mono mt-1" id="metric-allocated">804 IPs</div>
+        <span class="text-[11px] text-slate-500">Subnet Block Reserved</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <span class="text-xs font-medium text-slate-400">Next Free Subnet</span>
+        <div class="text-lg font-bold text-blue-400 mono mt-1" id="metric-nextfree">10.50.3.36</div>
+        <span class="text-[11px] text-slate-500" id="metric-freeips">64,732 IPs Remaining</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <span class="text-xs font-medium text-slate-400">Overall Efficiency</span>
+        <div class="text-lg font-bold text-purple-400 mono mt-1" id="metric-efficiency">55.1%</div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+          <div class="bg-purple-500 h-full rounded-full" id="metric-eff-bar" style="width: 55.1%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Selector -->
+    <div class="border-b border-slate-800 flex space-x-8">
+      <button onclick="switchTab('vlsm')" id="tab-btn-vlsm" class="pb-3 text-sm font-semibold text-cyan-400 border-b-2 border-cyan-400 transition">
+        🏢 Campus VLSM Lab Subnet Matrix
+      </button>
+      <button onclick="switchTab('binary')" id="tab-btn-binary" class="pb-3 text-sm font-semibold text-slate-400 hover:text-slate-200 transition">
+        🔬 32-Bit Binary Visualizer & ANDing
+      </button>
+      <button onclick="switchTab('reachability')" id="tab-btn-reachability" class="pb-3 text-sm font-semibold text-slate-400 hover:text-slate-200 transition">
+        🔄 Inter-Host Reachability (L2 vs L3)
+      </button>
+      <button onclick="switchTab('cheatsheet')" id="tab-btn-cheatsheet" class="pb-3 text-sm font-semibold text-slate-400 hover:text-slate-200 transition">
+        📖 CIDR Quick Reference
+      </button>
+    </div>
+
+    <!-- TAB 1: VLSM Lab Subnet Matrix -->
+    <div id="tab-vlsm" class="space-y-6">
+      
+      <!-- Top Settings & Add Lab Form -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Base Network Setup -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <div class="flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+            <h3 class="font-bold text-sm text-slate-200 uppercase tracking-wider">1. Base Campus Network</h3>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="col-span-2">
+              <label class="block text-xs text-slate-400 mb-1">Base Network IP</label>
+              <input type="text" id="base-ip" value="10.50.0.0" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Prefix / CIDR</label>
+              <input type="number" id="base-cidr" value="16" min="8" max="30" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 leading-relaxed">
+            Enterprise campus root block. All lab subnets are allocated sequentially from this pool without collision.
+          </p>
+        </div>
+
+        <!-- Add Lab Form -->
+        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <h3 class="font-bold text-sm text-slate-200 uppercase tracking-wider">2. Add Workstation Lab Demand</h3>
+            </div>
+            <span class="text-xs text-slate-500">Dynamic Host Scalability</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Lab / Facility Name</label>
+              <input type="text" id="new-lab-name" placeholder="e.g. AI & Robotics Lab" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Department / Wing</label>
+              <input type="text" id="new-lab-dept" placeholder="e.g. CSE Block A" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Workstations (PCs)</label>
+              <input type="number" id="new-lab-hosts" placeholder="60" min="1" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm mono text-emerald-400 focus:outline-none focus:border-cyan-500">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Growth Buffer %</label>
+              <input type="number" id="new-lab-growth" value="10" min="0" max="100" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm mono text-yellow-400 focus:outline-none focus:border-cyan-500">
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-1">
+            <span class="text-xs text-slate-500">Rule: VLSM auto-sorts largest subnets first to prevent binary fragmentation.</span>
+            <div class="flex space-x-2">
+              <button onclick="clearAllLabs()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+                Clear Labs
+              </button>
+              <button onclick="addLabFromForm()" class="px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/30 transition">
+                + Add Lab to Campus
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- VLSM Allocation Data Table -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-slate-200 text-base">Campus Subnet Allocation Matrix</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Calculated using non-overlapping contiguous power-of-2 VLSM blocks</p>
+          </div>
+          <button onclick="calculateVLSM()" class="px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/25 transition">
+            ⚡ Recalculate VLSM Plan
+          </button>
+        </div>
+
+        <div class="overflow-x-auto custom-scrollbar">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead class="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
+              <tr>
+                <th class="py-3.5 px-4 font-semibold">ID</th>
+                <th class="py-3.5 px-4 font-semibold">Lab Name & Department</th>
+                <th class="py-3.5 px-4 font-semibold">VLAN</th>
+                <th class="py-3.5 px-4 font-semibold">Subnet Address</th>
+                <th class="py-3.5 px-4 font-semibold">Subnet Mask</th>
+                <th class="py-3.5 px-4 font-semibold">Usable Host Range</th>
+                <th class="py-3.5 px-4 font-semibold">Default Gateway</th>
+                <th class="py-3.5 px-4 font-semibold">Workstations</th>
+                <th class="py-3.5 px-4 font-semibold">Capacity</th>
+                <th class="py-3.5 px-4 font-semibold">Efficiency</th>
+                <th class="py-3.5 px-4 font-semibold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="vlsm-tbody" class="divide-y divide-slate-800/60 font-medium">
+              <!-- Dynamically Populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 2: Binary Visualizer -->
+    <div id="tab-binary" class="hidden space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+        <div>
+          <h3 class="font-bold text-lg text-white">32-Bit Binary Logical Decomposition & ANDing Engine</h3>
+          <p class="text-xs text-slate-400 mt-1">Examine exactly how routers determine network boundaries using bitwise AND logic</p>
+        </div>
+
+        <div class="flex items-center space-x-4 max-w-xl">
+          <input type="text" id="binary-input" value="172.16.50.100/22" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+          <button onclick="renderBinaryView()" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/30 transition">
+            Decompose 32-Bits
+          </button>
+        </div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 font-mono text-sm space-y-4 overflow-x-auto">
+          <div class="space-y-2" id="binary-render-area">
+            <!-- Rendered by JS -->
+          </div>
+          <div class="pt-4 border-t border-slate-800 flex items-center space-x-6 text-xs font-sans">
+            <div class="flex items-center space-x-2">
+              <span class="w-3 h-3 rounded bg-cyan-400 inline-block"></span>
+              <span class="text-slate-300">Network Prefix Bits</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="w-3 h-3 rounded bg-emerald-400 inline-block"></span>
+              <span class="text-slate-300">Host Workstation Bits</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="w-3 h-3 rounded bg-yellow-400 inline-block"></span>
+              <span class="text-slate-300">Subnet Mask '1's</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="w-3 h-3 rounded bg-purple-400 inline-block"></span>
+              <span class="text-slate-300">Directed Broadcast '1's</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: Reachability Analyzer -->
+    <div id="tab-reachability" class="hidden space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+        <div>
+          <h3 class="font-bold text-lg text-white">Inter-Host Reachability & Routing Diagnostic Tool</h3>
+          <p class="text-xs text-slate-400 mt-1">Determine whether two workstations can communicate via direct Layer-2 switching or require Layer-3 Inter-VLAN routing</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+            <label class="text-xs font-bold text-cyan-400 uppercase tracking-wider">Endpoint Host A (IP / CIDR)</label>
+            <input type="text" id="reach-host-a" value="192.168.1.50/24" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm mono text-white focus:outline-none focus:border-cyan-500">
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+            <label class="text-xs font-bold text-yellow-400 uppercase tracking-wider">Endpoint Host B (IP / CIDR)</label>
+            <input type="text" id="reach-host-b" value="192.168.2.100/24" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm mono text-white focus:outline-none focus:border-yellow-500">
+          </div>
+        </div>
+
+        <button onclick="analyzeReachability()" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white shadow-lg shadow-cyan-500/20 transition">
+          🔍 Analyze Packet Path & Connectivity
+        </button>
+
+        <div id="reachability-result" class="bg-slate-950 border border-slate-800 rounded-xl p-6 space-y-4">
+          <!-- Dynamically Populated -->
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: CIDR Quick Reference -->
+    <div id="tab-cheatsheet" class="hidden space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+        <div>
+          <h3 class="font-bold text-lg text-white">IPv4 CIDR Prefix & Subnet Mask Quick Reference</h3>
+          <p class="text-xs text-slate-400 mt-1">Standard lookup table for prefix lengths from /16 to /30</p>
+        </div>
+
+        <div class="overflow-x-auto custom-scrollbar">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead class="bg-slate-950 text-slate-400 uppercase text-[11px] border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4">CIDR</th>
+                <th class="py-3 px-4">Subnet Mask</th>
+                <th class="py-3 px-4">Wildcard Mask</th>
+                <th class="py-3 px-4">Total IP Addresses</th>
+                <th class="py-3 px-4">Usable Workstations</th>
+              </tr>
+            </thead>
+            <tbody id="cheatsheet-tbody" class="divide-y divide-slate-800/60 font-mono">
+              <!-- Dynamically Populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="border-t border-slate-800 bg-slate-950 text-slate-500 text-xs py-6 text-center">
+    <p>NetLab-Pro &copy; Computer Networks Project Suite &bull; Built in C with Native Win32 GUI &amp; Web Dashboard</p>
+  </footer>
+
+  <script>
+    /* State */
+    let labs = [];
+
+    /* IPv4 Math Helpers */
+    function ipToInt(ipStr) {
+      const parts = ipStr.trim().split('.').map(Number);
+      if (parts.length !== 4 || parts.some(p => isNaN(p) || p < 0 || p > 255)) return null;
+      return ((parts[0] << 24) >>> 0) + ((parts[1] << 16) >>> 0) + ((parts[2] << 8) >>> 0) + (parts[3] >>> 0);
+    }
+
+    function intToIp(intVal) {
+      return [
+        (intVal >>> 24) & 255,
+        (intVal >>> 16) & 255,
+        (intVal >>> 8) & 255,
+        intVal & 255
+      ].join('.');
+    }
+
+    function cidrToMask(cidr) {
+      if (cidr <= 0) return 0;
+      if (cidr >= 32) return 0xFFFFFFFF >>> 0;
+      return ((0xFFFFFFFF << (32 - cidr)) >>> 0);
+    }
+
+    function loadCollegePreset() {
+      document.getElementById('base-ip').value = "10.50.0.0";
+      document.getElementById('base-cidr').value = "16";
+
+      labs = [
+        { id: 1, name: "Artificial Intelligence & Robotics Lab", dept: "CSE Dept - Block A", hosts: 120, growth: 15, vlan: 10 },
+        { id: 2, name: "Cloud Computing & Data Science Lab",  dept: "CSE Dept - Block A", hosts: 90,  growth: 10, vlan: 20 },
+        { id: 3, name: "Cyber Security & Forensics Lab",      dept: "IT Dept - Block B",  hosts: 65,  growth: 10, vlan: 30 },
+        { id: 4, name: "Object-Oriented Programming Lab",     dept: "CSE Dept - Block A", hosts: 60,  growth: 10, vlan: 50 },
+        { id: 5, name: "Internet of Things (IoT) Embedded Lab",dept: "ECE Dept - Block C", hosts: 45,  growth: 10, vlan: 40 },
+        { id: 6, name: "High-Performance Data Center Farm",    dept: "Central IT Wing",    hosts: 30,  growth: 20, vlan: 60 },
+        { id: 7, name: "Faculty Research & Admin Wing",       dept: "Admin Building",     hosts: 22,   growth: 5, vlan: 70 },
+        { id: 8, name: "Core Router Inter-Switch Backbone",   dept: "Campus WAN Infra",    hosts: 2,   growth: 0, vlan: 99 }
+      ];
+
+      calculateVLSM();
+    }
+
+    function addLabFromForm() {
+      const name = document.getElementById('new-lab-name').value.trim() || `Computer Lab ${labs.length + 1}`;
+      const dept = document.getElementById('new-lab-dept').value.trim() || "Main Campus";
+      const hosts = parseInt(document.getElementById('new-lab-hosts').value) || 60;
+      const growth = parseInt(document.getElementById('new-lab-growth').value) || 10;
+      const vlan = 10 + (labs.length * 10);
+
+      labs.push({ id: labs.length + 1, name, dept, hosts, growth, vlan });
+      document.getElementById('new-lab-name').value = '';
+      document.getElementById('new-lab-dept').value = '';
+      document.getElementById('new-lab-hosts').value = '';
+
+      calculateVLSM();
+    }
+
+    function removeLab(index) {
+      labs.splice(index, 1);
+      calculateVLSM();
+    }
+
+    function clearAllLabs() {
+      labs = [];
+      calculateVLSM();
+    }
+
+    function calculateVLSM() {
+      const baseIpStr = document.getElementById('base-ip').value.trim();
+      const baseCidr = parseInt(document.getElementById('base-cidr').value) || 16;
+      const baseInt = ipToInt(baseIpStr);
+
+      if (baseInt === null) {
+        alert("Invalid Base Network IP!");
+        return;
+      }
+
+      const baseMask = cidrToMask(baseCidr);
+      const baseNet = (baseInt & baseMask) >>> 0;
+      const baseWildcard = ((~baseMask) >>> 0);
+      const baseBroadcast = (baseNet | baseWildcard) >>> 0;
+      const totalCapacity = Math.pow(2, 32 - baseCidr);
+
+      /* Calculate effective hosts and sort descending */
+      labs.forEach(lab => {
+        lab.effective = Math.ceil(lab.hosts * (1 + (lab.growth / 100)));
+        if (lab.effective < 2) lab.effective = 2;
+      });
+
+      labs.sort((a, b) => b.effective - a.effective);
+
+      let currentNet = baseNet;
+      let totalRequested = 0;
+      let totalAllocated = 0;
+
+      labs.forEach((lab, idx) => {
+        lab.id = idx + 1;
+        totalRequested += lab.hosts;
+
+        let h = 2;
+        while (h < 31 && (Math.pow(2, h) - 2) < lab.effective) {
+          h++;
+        }
+        const cidr = 32 - h;
+        const blockSize = Math.pow(2, h);
+
+        /* Boundary alignment */
+        if (currentNet % blockSize !== 0) {
+          currentNet = Math.ceil(currentNet / blockSize) * blockSize;
+        }
+
+        lab.cidr = cidr;
+        lab.blockSize = blockSize;
+        lab.usableCapacity = blockSize - 2;
+        lab.networkIp = currentNet;
+        lab.subnetMask = cidrToMask(cidr);
+        lab.broadcastIp = (currentNet + blockSize - 1) >>> 0;
+        lab.firstUsable = (currentNet + 1) >>> 0;
+        lab.lastUsable = (lab.broadcastIp - 1) >>> 0;
+        lab.gateway = lab.firstUsable;
+        lab.efficiency = ((lab.hosts / lab.usableCapacity) * 100).toFixed(1);
+
+        totalAllocated += blockSize;
+        currentNet = (currentNet + blockSize) >>> 0;
+      });
+
+      const nextFree = currentNet;
+      const freeRemaining = baseBroadcast >= currentNet ? (baseBroadcast - currentNet + 1) : 0;
+      const overallEff = totalAllocated > 0 ? ((totalRequested / totalAllocated) * 100).toFixed(1) : 0;
+
+      /* Update Metrics Bar */
+      document.getElementById('metric-base').innerText = `${intToIp(baseNet)}/${baseCidr}`;
+      document.getElementById('metric-capacity').innerText = `${totalCapacity.toLocaleString()} Total IPs`;
+      document.getElementById('metric-workstations').innerText = `${totalRequested} PCs`;
+      document.getElementById('metric-allocated').innerText = `${totalAllocated.toLocaleString()} IPs`;
+      document.getElementById('metric-nextfree').innerText = intToIp(nextFree);
+      document.getElementById('metric-freeips').innerText = `${freeRemaining.toLocaleString()} IPs Remaining`;
+      document.getElementById('metric-efficiency').innerText = `${overallEff}%`;
+      document.getElementById('metric-eff-bar').style.width = `${Math.min(overallEff, 100)}%`;
+
+      /* Render Table */
+      const tbody = document.getElementById('vlsm-tbody');
+      tbody.innerHTML = '';
+
+      if (labs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" class="py-8 text-center text-slate-500">No computer labs planned yet. Click [+ Add Lab] or [Load College Preset].</td></tr>`;
+        return;
+      }
+
+      labs.forEach((lab, i) => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-800/40 transition";
+        tr.innerHTML = `
+          <td class="py-3 px-4 text-slate-500 font-mono">${lab.id}</td>
+          <td class="py-3 px-4">
+            <div class="font-bold text-white text-sm">${lab.name}</div>
+            <div class="text-[11px] text-slate-400">${lab.dept}</div>
+          </td>
+          <td class="py-3 px-4">
+            <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono text-[11px] border border-blue-500/20">VLAN${lab.vlan}</span>
+          </td>
+          <td class="py-3 px-4 font-mono text-cyan-400 font-semibold">${intToIp(lab.networkIp)}/${lab.cidr}</td>
+          <td class="py-3 px-4 font-mono text-slate-400">${intToIp(lab.subnetMask)}</td>
+          <td class="py-3 px-4 font-mono text-emerald-400">${intToIp(lab.firstUsable)} <span class="text-slate-600">➔</span> ${intToIp(lab.lastUsable)}</td>
+          <td class="py-3 px-4 font-mono text-yellow-400">${intToIp(lab.gateway)}</td>
+          <td class="py-3 px-4 mono font-semibold text-slate-200">${lab.hosts} PCs</td>
+          <td class="py-3 px-4 mono text-slate-400">${lab.usableCapacity}</td>
+          <td class="py-3 px-4">
+            <span class="px-2 py-0.5 rounded ${lab.efficiency > 70 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'} font-mono text-[11px] border">
+              ${lab.efficiency}%
+            </span>
+          </td>
+          <td class="py-3 px-4 text-right">
+            <button onclick="removeLab(${i})" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition">
+              Delete
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    /* Binary Visualizer */
+    function toBinaryOctets(intVal) {
+      let s = (intVal >>> 0).toString(2).padStart(32, '0');
+      return [s.slice(0,8), s.slice(8,16), s.slice(16,24), s.slice(24,32)].join('.');
+    }
+
+    function renderBinaryView() {
+      const input = document.getElementById('binary-input').value.trim();
+      const slash = input.indexOf('/');
+      if (slash === -1) return;
+
+      const ipStr = input.slice(0, slash);
+      const cidr = parseInt(input.slice(slash + 1));
+      const ipInt = ipToInt(ipStr);
+      if (ipInt === null || isNaN(cidr) || cidr < 0 || cidr > 32) return;
+
+      const maskInt = cidrToMask(cidr);
+      const netInt = (ipInt & maskInt) >>> 0;
+      const bcastInt = (netInt | ((~maskInt) >>> 0)) >>> 0;
+
+      const area = document.getElementById('binary-render-area');
+      area.innerHTML = `
+        <div class="flex items-center justify-between text-slate-400 py-1">
+          <span>IP Address   :</span>
+          <span class="text-cyan-400 font-bold">${toBinaryOctets(ipInt)}</span>
+          <span class="text-slate-300">(${ipStr})</span>
+        </div>
+        <div class="flex items-center justify-between text-slate-400 py-1">
+          <span>Subnet Mask  :</span>
+          <span class="text-yellow-400 font-bold">${toBinaryOctets(maskInt)}</span>
+          <span class="text-slate-300">(${intToIp(maskInt)})</span>
+        </div>
+        <div class="border-b border-slate-800 my-2"></div>
+        <div class="flex items-center justify-between text-slate-400 py-1">
+          <span>Network ID   :</span>
+          <span class="text-emerald-400 font-bold">${toBinaryOctets(netInt)}</span>
+          <span class="text-slate-300">(${intToIp(netInt)})</span>
+        </div>
+        <div class="flex items-center justify-between text-slate-400 py-1">
+          <span>Broadcast ID :</span>
+          <span class="text-purple-400 font-bold">${toBinaryOctets(bcastInt)}</span>
+          <span class="text-slate-300">(${intToIp(bcastInt)})</span>
+        </div>
+      `;
+    }
+
+    /* Reachability Analyzer */
+    function analyzeReachability() {
+      const a = document.getElementById('reach-host-a').value.trim().split('/');
+      const b = document.getElementById('reach-host-b').value.trim().split('/');
+
+      const ipA = ipToInt(a[0]), cidrA = parseInt(a[1]);
+      const ipB = ipToInt(b[0]), cidrB = parseInt(b[1]);
+      const resDiv = document.getElementById('reachability-result');
+
+      if (!ipA || !ipB || isNaN(cidrA) || isNaN(cidrB)) {
+        resDiv.innerHTML = `<span class="text-rose-400">Invalid IP/CIDR input!</span>`;
+        return;
+      }
+
+      const maskA = cidrToMask(cidrA);
+      const maskB = cidrToMask(cidrB);
+      const netA = (ipA & maskA) >>> 0;
+      const netB = (ipB & maskB) >>> 0;
+
+      const aThinksBLocal = ((ipB & maskA) >>> 0) === netA;
+      const bThinksALocal = ((ipA & maskB) >>> 0) === netB;
+
+      let statusBadge, diag, rec;
+
+      if (aThinksBLocal && bThinksALocal && cidrA === cidrB) {
+        statusBadge = `<span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold text-xs">DIRECT LAYER-2 SWITCHED PATH</span>`;
+        diag = `Both hosts belong to the identical subnet (${intToIp(netA)}/${cidrA}). Frames will be exchanged directly through a Layer-2 switch using ARP resolution. No router or gateway hop is required.`;
+        rec = `Verify that both endpoints are assigned to the identical switch VLAN.`;
+      } else if (aThinksBLocal !== bThinksALocal) {
+        statusBadge = `<span class="px-3 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold text-xs">ASYMMETRIC MASK MISCONFIGURATION</span>`;
+        diag = `Critical configuration error! Host A considers Host B local, while Host B considers Host A remote. This results in one-way communication blackholes.`;
+        rec = `Correct the subnet masks on both hosts to match the physical broadcast domain.`;
+      } else {
+        statusBadge = `<span class="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold text-xs">LAYER-3 ROUTED PATH REQUIRED</span>`;
+        diag = `Endpoints reside on different subnets (Host A on ${intToIp(netA)}/${cidrA}, Host B on ${intToIp(netB)}/${cidrB}). Traffic MUST be forwarded via Default Gateways; an intermediate Layer-3 Switch or Router must perform Inter-VLAN routing (802.1Q).`;
+        rec = `Ensure default gateways are configured on both workstations and IP routing is enabled on the core switch/router.`;
+      }
+
+      resDiv.innerHTML = `
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-slate-400">Diagnosis Result:</span>
+          ${statusBadge}
+        </div>
+        <div class="text-sm text-slate-200 leading-relaxed font-sans">${diag}</div>
+        <div class="text-xs text-cyan-400 border-l-2 border-cyan-500 pl-3 py-1">${rec}</div>
+      `;
+    }
+
+    /* Cheatsheet */
+    function populateCheatsheet() {
+      const tbody = document.getElementById('cheatsheet-tbody');
+      tbody.innerHTML = '';
+      for (let c = 16; c <= 30; c++) {
+        const mask = cidrToMask(c);
+        const wild = (~mask) >>> 0;
+        const total = Math.pow(2, 32 - c);
+        const usable = total - 2;
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-800/40 transition";
+        tr.innerHTML = `
+          <td class="py-2.5 px-4 font-bold text-cyan-400">/${c}</td>
+          <td class="py-2.5 px-4 text-yellow-400">${intToIp(mask)}</td>
+          <td class="py-2.5 px-4 text-slate-400">${intToIp(wild)}</td>
+          <td class="py-2.5 px-4 text-slate-300">${total.toLocaleString()}</td>
+          <td class="py-2.5 px-4 text-emerald-400 font-semibold">${usable.toLocaleString()} PCs</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    /* Tab Switcher */
+    function switchTab(tab) {
+      ['vlsm', 'binary', 'reachability', 'cheatsheet'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.add('hidden');
+        document.getElementById(`tab-btn-${t}`).className = "pb-3 text-sm font-semibold text-slate-400 hover:text-slate-200 transition";
+      });
+      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+      document.getElementById(`tab-btn-${tab}`).className = "pb-3 text-sm font-semibold text-cyan-400 border-b-2 border-cyan-400 transition";
+
+      if (tab === 'binary') renderBinaryView();
+      if (tab === 'reachability') analyzeReachability();
+    }
+
+    /* Exports */
+    function exportCSV() {
+      let csv = "ID,Lab Name,Department,Workstations,VLAN,Subnet Address,Subnet Mask,First Usable,Last Usable,Gateway,Capacity,Efficiency\n";
+      labs.forEach(l => {
+        csv += `${l.id},"${l.name}","${l.dept}",${l.hosts},VLAN${l.vlan},${intToIp(l.networkIp)}/${l.cidr},${intToIp(l.subnetMask)},${intToIp(l.firstUsable)},${intToIp(l.lastUsable)},${intToIp(l.gateway)},${l.usableCapacity},${l.efficiency}%\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = "campus_subnets.csv";
+      a.click();
+    }
+
+    function exportCiscoConfig() {
+      let cfg = "! CISCO ENTERPRISE CAMPUS SUBNET SCRIPT\nenable\nconfigure terminal\nip routing\n!\n";
+      labs.forEach(l => {
+        const cleanName = l.name.replace(/[^a-zA-Z0-9]/g, '_');
+        cfg += `ip dhcp pool POOL_${cleanName}\n network ${intToIp(l.networkIp)} ${intToIp(l.subnetMask)}\n default-router ${intToIp(l.gateway)}\n dns-server 8.8.8.8\n exit\n!\n`;
+        cfg += `vlan ${l.vlan}\n name ${cleanName}\n exit\n!\n`;
+        cfg += `interface Vlan${l.vlan}\n ip address ${intToIp(l.gateway)} ${intToIp(l.subnetMask)}\n no shutdown\n exit\n!\n`;
+      });
+      cfg += "end\nwrite memory\n";
+      const blob = new Blob([cfg], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = "campus_cisco.cfg";
+      a.click();
+    }
+
+    /* Initialize */
+    loadCollegePreset();
+    populateCheatsheet();
+  </script>
+</body>
+</html>
